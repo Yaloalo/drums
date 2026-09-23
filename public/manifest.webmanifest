@@ -1,0 +1,21 @@
+{
+  "name": "Pulse Foundry — Rhythm Instrument",
+  "short_name": "Pulse Foundry",
+  "description": "Offline drum machine, percussion synthesizer and rhythm trainer.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#07090b",
+  "theme_color": "#07090b",
+  "categories": ["music", "education", "productivity"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Play Pads", "short_name": "Pads", "url": "/?area=pads", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Drum Machine", "short_name": "Machine", "url": "/?area=sequencer", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
