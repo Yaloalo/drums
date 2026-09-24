@@ -100,6 +100,8 @@ The rhythm library includes fundamentals, grooves, odd meters, compound meters, 
 
 Exercises are definitions interpreted by one generic training engine—not individual hard-coded screens. Each definition carries its meter, tempo range, target pads and notes, instructions, difficulty, style, optional drum-machine backing, and scoring setup. Before starting, choose tempo, duration (30 seconds through 10 minutes or unlimited), compatible backing groove, count-in, click, guide mode, and relaxed/normal/strict timing tolerance. **Listen** demonstrates the target without scoring. **Start practice** configures the real shared kit, rhythm, BPM, metronome, and transport, then sends the player to the real pad surface with notation, instructions, countdown, live timing feedback, and highlighted target pads.
 
+Exercise rhythms are shown as simplified standard drum-set notation rather than a copy of the step sequencer: five staff lines, a percussion clef, low-to-high drum placement, filled drum heads, x-shaped cymbal/hi-hat heads, open-hi-hat marks, bar lines, counts, and stacked simultaneous notes. The first four lessons form a dedicated beginner path from quarter-note hi-hat through subdivisions and the snare backbeat to a complete kick/snare/hi-hat rock beat. Accompaniment is explicit: metronome, drum groove, both, or no backing, with the exact compatible groove selectable below.
+
 The results view reports score and grade, timing accuracy, consistency, early/late bias, misses, extras, wrong pads, streak, per-bar drift, timing distribution, and concise practice advice. Exercise history, best scores, calibration offset, favourites, browser state, and session preferences remain local in IndexedDB.
 
 ## Offline installation

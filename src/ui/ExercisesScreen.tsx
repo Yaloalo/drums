@@ -15,7 +15,6 @@ import {
   X,
 } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
-import { Switch } from '@/components/ui/switch';
 import type {
   Exercise,
   ExerciseAttempt,
@@ -407,7 +406,7 @@ export function ExercisesScreen() {
               return (
                 <button
                   key={exercise.id}
-                  className={`exercise-card ${selected.id === exercise.id ? 'active' : ''}`}
+                  className={`exercise-card ${best !== null ? 'scored' : ''} ${selected.id === exercise.id ? 'active' : ''}`}
                   aria-pressed={selected.id === exercise.id}
                   onClick={() => {
                     setBrowser((current) => ({
@@ -436,19 +435,18 @@ export function ExercisesScreen() {
                         {exercise.parts.length} pad
                         {exercise.parts.length > 1 ? 's' : ''}
                       </i>
+                      {exercise.id.startsWith('exercise-drum-basics-') && (
+                        <i className="start-tag">start here</i>
+                      )}
                       {exercise.backing && <i>groove</i>}
                     </span>
                   </span>
-                  <span className={`card-score ${status}`}>
-                    {best === null ? 'New' : best}
-                    <small>
-                      {best === null
-                        ? ''
-                        : status === 'mastered'
-                          ? 'mastered'
-                          : 'best'}
-                    </small>
-                  </span>
+                  {best !== null && (
+                    <span className={`card-score ${status}`}>
+                      {best}
+                      <small>{status === 'mastered' ? 'mastered' : 'best'}</small>
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -521,6 +519,79 @@ const LENGTHS: { value: string; label: string }[] = [
   { value: 'free', label: 'No limit' },
 ];
 
+const DRUM_ROLES: Record<number, { name: string; role: string; notation: string }> = {
+  0: {
+    name: 'Kick',
+    role: 'The low foundation. Start by placing it on beats 1 and 3.',
+    notation: 'low on the staff',
+  },
+  1: {
+    name: 'Snare',
+    role: 'The backbeat voice. In a basic rock groove it lands on 2 and 4.',
+    notation: 'middle line',
+  },
+  2: {
+    name: 'Closed hi-hat',
+    role: 'The timekeeper. It makes the beat subdivision easy to hear.',
+    notation: 'x note above the staff',
+  },
+  3: {
+    name: 'Open hi-hat',
+    role: 'A sustained hi-hat colour, often used on offbeats or transitions.',
+    notation: 'x note with an open circle',
+  },
+  4: {
+    name: 'Low tom',
+    role: 'A lower drum voice used to move through fills.',
+    notation: 'lower half of the staff',
+  },
+  5: {
+    name: 'High tom',
+    role: 'A higher drum voice that often begins a descending fill.',
+    notation: 'upper half of the staff',
+  },
+  11: {
+    name: 'Crash',
+    role: 'A strong accent that commonly marks a new phrase.',
+    notation: 'x note above the staff',
+  },
+  12: {
+    name: 'Ride',
+    role: 'A cymbal timekeeping voice with more sustain than the hi-hat.',
+    notation: 'x note above the staff',
+  },
+};
+
+function DrumLesson({ exercise }: { exercise: Exercise }) {
+  const roles = exercise.parts.flatMap((part) => {
+    const item = DRUM_ROLES[part.pad];
+    return item ? [{ pad: part.pad, item }] : [];
+  });
+  if (!roles.length) return null;
+  return (
+    <section className="detail-basics">
+      <h3>Drum-set basics</h3>
+      <p>
+        The staff reads from low drums at the bottom to cymbals at the top.
+        Count left to right; stacked notes play together.
+      </p>
+      <ul>
+        {roles.map(({ pad, item }) => (
+          <li key={pad}>
+            <b>{item.name}</b>
+            <span>{item.role}</span>
+            <small>{item.notation}</small>
+          </li>
+        ))}
+      </ul>
+      <small className="phone-note">
+        The phone pads teach rhythm, reading and independence. They simulate kit
+        voices—not physical hand-and-foot technique.
+      </small>
+    </section>
+  );
+}
+
 function ExerciseDetail({
   exercise,
   onBack,
@@ -548,10 +619,20 @@ function ExerciseDetail({
     session?.mode === 'listen' && session.exercise.id === exercise.id;
   const set = (patch: Partial<PracticeOptions>) =>
     setExerciseOptions(exercise, patch);
+  const grooves = compatibleBackings(exercise);
+  const preferredBacking =
+    options.backing ?? exercise.backing ?? grooves[0]?.id ?? null;
+  const accompaniment = options.backing
+    ? options.click
+      ? 'both'
+      : 'groove'
+    : options.click
+      ? 'click'
+      : 'silent';
   const backingName = (id: string | null) =>
     id
       ? (RHYTHM_PRESETS.find((rhythm) => rhythm.id === id)?.title ?? id)
-      : 'Click only';
+      : 'Metronome';
   const favorite = prefs.favorites.includes(exercise.id);
 
   // While listening, changes to what is heard restart the demo at once.
@@ -603,8 +684,8 @@ function ExerciseDetail({
         </li>
         <li>
           {exercise.backing
-            ? `Plays with ${backingName(exercise.backing)}`
-            : 'Click only'}
+            ? `Suggested groove: ${backingName(exercise.backing)}`
+            : 'Metronome or drum groove'}
         </li>
         {exercise.gap && (
           <li>
@@ -614,6 +695,7 @@ function ExerciseDetail({
       </ul>
 
       <TargetNotation exercise={exercise} />
+      <DrumLesson exercise={exercise} />
 
       <section className="detail-how">
         <h3>How to play</h3>
@@ -672,49 +754,69 @@ function ExerciseDetail({
             }
           />
         </div>
-        <div className="setup-row">
-          <span>Backing</span>
-          <SearchMenu
-            ariaLabel="Backing groove"
-            className="backing-menu"
-            value={options.backing ?? 'none'}
+        <section className="accompaniment-setup">
+          <header>
+            <span>Play with</span>
+            <small>
+              {accompaniment === 'click'
+                ? 'A clear pulse with no other drums'
+                : accompaniment === 'groove'
+                  ? 'A drum-machine part, without the click'
+                  : accompaniment === 'both'
+                    ? 'The backing groove plus a reference click'
+                    : 'No backing—use your internal pulse'}
+            </small>
+          </header>
+          <Chips
+            ariaLabel="Accompaniment"
+            value={accompaniment}
             options={[
-              ...compatibleBackings(exercise).map((rhythm) => ({
-                value: rhythm.id,
-                label: rhythm.title,
-                detail:
-                  rhythm.id === exercise.backing
-                    ? 'Recommended'
-                    : rhythm.tags.join(' · '),
-                group:
-                  rhythm.id === exercise.backing
-                    ? 'For this exercise'
-                    : `Other ${meterOf(exercise)} grooves`,
-              })),
-              {
-                value: 'none',
-                label: 'Click only',
-                detail: 'No drum groove',
-                group: 'None',
-              },
-            ].sort(
-              (a, b) =>
-                Number(b.group === 'For this exercise') -
-                Number(a.group === 'For this exercise'),
-            )}
-            onChange={(value) =>
-              set({ backing: value === 'none' ? null : value })
-            }
+              { value: 'click', label: 'Metronome' },
+              { value: 'groove', label: 'Drum groove' },
+              { value: 'both', label: 'Both' },
+              { value: 'silent', label: 'No backing' },
+            ]}
+            onChange={(value) => {
+              if (value === 'click') set({ backing: null, click: true });
+              else if (value === 'groove')
+                set({ backing: preferredBacking, click: false });
+              else if (value === 'both')
+                set({ backing: preferredBacking, click: true });
+              else set({ backing: null, click: false });
+            }}
           />
-        </div>
-        <div className="setup-row">
-          <span>Click</span>
-          <Switch
-            aria-label="Click"
-            checked={options.click}
-            onCheckedChange={(click) => set({ click })}
-          />
-          <span className="setup-sub">Count-in</span>
+          {options.backing && (
+            <div className="groove-choice">
+              <span>Groove</span>
+              <SearchMenu
+                ariaLabel="Backing groove"
+                className="backing-menu"
+                value={options.backing}
+                options={grooves
+                  .map((rhythm) => ({
+                    value: rhythm.id,
+                    label: rhythm.title,
+                    detail:
+                      rhythm.id === exercise.backing
+                        ? 'Recommended for this lesson'
+                        : rhythm.tags.join(' · '),
+                    group:
+                      rhythm.id === exercise.backing
+                        ? 'Recommended'
+                        : `${meterOf(exercise)} grooves`,
+                  }))
+                  .sort(
+                    (a, b) =>
+                      Number(b.group === 'Recommended') -
+                      Number(a.group === 'Recommended'),
+                  )}
+                onChange={(backing) => set({ backing })}
+              />
+            </div>
+          )}
+        </section>
+        <div className="setup-row countin-row">
+          <span>Count-in</span>
           <Chips
             ariaLabel="Count-in"
             value={String(options.countInBars)}

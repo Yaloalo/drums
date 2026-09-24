@@ -119,6 +119,73 @@ interface Spec {
 }
 
 const specs: Spec[] = [
+  // ─── Start here: the three voices of a basic drum-set groove ───
+  {
+    id: 'drum-basics-hi-hat-quarter',
+    title: '1 · Meet the hi-hat',
+    skill: 'pulse',
+    style: 'rock',
+    difficulty: 1,
+    bpm: 60,
+    range: [45, 100],
+    summary: 'Read four quarter notes and make the hi-hat your timekeeper.',
+    instructions: [
+      'Play CLOSED HAT with every metronome click.',
+      'Count “1 2 3 4” aloud and keep every space equal.',
+    ],
+    tip: 'On a drum set the hi-hat usually carries the subdivision. Here your pad teaches that timekeeping role.',
+    parts: { [H]: [0, 4, 8, 12] },
+  },
+  {
+    id: 'drum-basics-hi-hat-eighths',
+    title: '2 · Split the beat',
+    skill: 'pulse',
+    style: 'rock',
+    difficulty: 1,
+    bpm: 60,
+    range: [45, 100],
+    summary: 'Turn each beat into two even hi-hat notes: “1 & 2 &”.',
+    instructions: [
+      'Play CLOSED HAT on every number and every “&”.',
+      'The numbered notes and the “&” notes must be equally spaced.',
+    ],
+    tip: 'Keep counting “1 & 2 & 3 & 4 &” even when it begins to feel automatic.',
+    parts: { [H]: eighths },
+  },
+  {
+    id: 'drum-basics-snare-backbeat',
+    title: '3 · Add the snare backbeat',
+    skill: 'pulse',
+    style: 'rock',
+    difficulty: 1,
+    bpm: 64,
+    range: [45, 105],
+    summary: 'Hear steady hi-hats while you place the snare on beats 2 and 4.',
+    instructions: [
+      'Listen to the backing hi-hat counting eighth notes.',
+      'Play SNARE only on beats 2 and 4—the basic backbeat.',
+    ],
+    tip: 'Say “one, TWO, three, FOUR” and make 2 and 4 feel equally strong.',
+    parts: { [S]: [4, 12] },
+    backing: 'rhythm-eighth-pulse',
+  },
+  {
+    id: 'drum-basics-first-beat',
+    title: '4 · Your first drum beat',
+    skill: 'pulse',
+    style: 'rock',
+    difficulty: 1,
+    bpm: 60,
+    range: [45, 100],
+    summary: 'Combine hi-hat eighths, kick on 1 and 3, and snare on 2 and 4.',
+    instructions: [
+      'Keep CLOSED HAT moving on “1 & 2 & 3 & 4 &”.',
+      'Add KICK on 1 and 3, and SNARE on 2 and 4.',
+      'Stacked notes in the staff are played at the same time.',
+    ],
+    tip: 'Learn one layer at a time, then combine them. Accuracy matters more than speed.',
+    parts: { [H]: eighths, [K]: [0, 8], [S]: [4, 12] },
+  },
   // ─── Pulse ───
   {
     id: 'quarter-notes',

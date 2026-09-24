@@ -53,6 +53,24 @@ void test('the exercise library is varied and every exercise is valid', () => {
     assert.deepEqual(validateExercise(exercise), [], exercise.id);
 });
 
+void test('the curriculum opens with a readable first drum beat path', () => {
+  assert.deepEqual(
+    EXERCISES.slice(0, 4).map((exercise) => exercise.id),
+    [
+      'exercise-drum-basics-hi-hat-quarter',
+      'exercise-drum-basics-hi-hat-eighths',
+      'exercise-drum-basics-snare-backbeat',
+      'exercise-drum-basics-first-beat',
+    ],
+  );
+  const firstBeat = exerciseById('exercise-drum-basics-first-beat')!;
+  assert.deepEqual(
+    firstBeat.parts.map((part) => part.pad).sort((a, b) => a - b),
+    [0, 1, 2],
+    'kick, snare and hi-hat form the first complete groove',
+  );
+});
+
 void test('parts are described in counting language', () => {
   assert.equal(describePart(quarter, quarter.parts[0]), 'every beat');
   const charleston = exerciseById('exercise-charleston')!;
