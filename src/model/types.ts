@@ -10,7 +10,11 @@ export type ModulationSource =
   | 'ampEnv'
   | 'modEnv'
   | 'velocity'
-  | 'random';
+  | 'random'
+  | 'macro1'
+  | 'macro2'
+  | 'macro3'
+  | 'macro4';
 export type ModulationDestination =
   | 'pitch'
   | 'pitch1'
@@ -20,6 +24,8 @@ export type ModulationDestination =
   | 'pan'
   | 'engine1'
   | 'engine2'
+  | 'utility'
+  | 'utilityPitch'
   | 'combine'
   | 'cutoff'
   | 'resonance'
@@ -138,9 +144,32 @@ export interface FilterDefinition {
   keyTracking: number;
 }
 
+/** Pigments-style always-available support layer for sub weight and attack noise. */
+export interface UtilitySource {
+  enabled: boolean;
+  baseFrequency: number;
+  oscillator: {
+    enabled: boolean;
+    waveform: Exclude<Waveform, 'noise'>;
+    octave: number;
+    level: number;
+  };
+  noise: {
+    enabled: boolean;
+    type: 'white' | 'pink' | 'metal';
+    level: number;
+  };
+  ampEnvelope: Envelope;
+  /** 0 sends the source to Filter 1, 1 to Filter 2. */
+  filterMix: number;
+  /** A parallel clean feed around both filters; useful for preserving a sub. */
+  direct: number;
+}
+
 /** Two engine slots feed two filters, then the amp and the effects. */
 export interface VoiceArchitecture {
   engines: [EngineSlot, EngineSlot];
+  utility: UtilitySource;
   combine: { mode: CombineMode; amount: number };
   filters: [FilterDefinition, FilterDefinition];
   /** 0 = series (Filter 1 feeds Filter 2), 1 = parallel. */
@@ -155,6 +184,8 @@ export interface MacroMapping {
   destination: string;
   min: number;
   max: number;
+  /** Performance position. Macro routes use this as a 0…1 modulation source. */
+  value?: number;
 }
 
 export interface SynthPreset {
