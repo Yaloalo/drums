@@ -1,15 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import {
-  ArrowRight,
-  Copy,
-  Eraser,
-  Layers3,
-  Redo2,
-  Save,
-  Undo2,
-} from 'lucide-react';
+import { Copy, Eraser, Layers3, Redo2, Save, Undo2 } from 'lucide-react';
 import {
   NativeSelect,
   NativeSelectOption,
@@ -19,6 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { RHYTHM_PRESETS } from '../presets/rhythms';
 import { useApp } from '../state/AppContext';
 import { TransportBar } from './TransportBar';
+import { Metronome } from './Metronome';
 
 export function SequencerScreen() {
   const {
@@ -39,7 +32,6 @@ export function SequencerScreen() {
     loadRhythm,
     savePattern,
     updateTransport,
-    setArea,
   } = useApp();
   const [paint, setPaint] = useState<{
     pointer: number;
@@ -87,15 +79,18 @@ export function SequencerScreen() {
           <h1>{pattern.name}</h1>
         </div>
         <TransportBar />
-        <button
-          className="back-control right"
-          onClick={() => setArea('pads')}
-          aria-label="Return to pads"
-        >
-          <span>PADS</span>
-          <ArrowRight />
-        </button>
       </header>
+
+      <div className="sequence-practice-tools" data-gesture-lock>
+        <Metronome />
+        <button
+          className={transport.recording ? 'recording-enabled' : ''}
+          aria-pressed={transport.recording}
+          onClick={() => updateTransport({ recording: !transport.recording })}
+        >
+          {transport.recording ? 'Recording armed' : 'Record pads'}
+        </button>
+      </div>
 
       <div className="machine-meta" data-gesture-lock>
         <label>

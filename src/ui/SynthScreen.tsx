@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { ArrowLeft, Copy, Play, RotateCcw, Save, Sparkles } from 'lucide-react';
+import { Fragment, useState } from 'react';
+import { Copy, Play, RotateCcw, Save, Sparkles } from 'lucide-react';
 import {
   NativeSelect,
   NativeSelectOption,
@@ -19,6 +19,14 @@ import type {
 } from '../model/types';
 import { cloneSerializable } from '../model/types';
 import { useApp } from '../state/AppContext';
+import { PadTools } from './PadTools';
+import {
+  EngineVisual,
+  EnvelopeCurve,
+  FMGraph,
+  ModulationDock,
+  SoundScope,
+} from './SynthVisuals';
 
 type Section = 'tone' | 'envelope' | 'modulation' | 'effects' | 'library';
 
@@ -35,7 +43,7 @@ export function SynthScreen() {
     saveSelectedPreset,
     duplicateSelectedPreset,
     switchEngine,
-    setArea,
+    selectPad,
   } = useApp();
   const [section, setSection] = useState<Section>('tone');
   const pad = kit.pads[selectedPadIndex];
@@ -54,16 +62,8 @@ export function SynthScreen() {
   return (
     <section className="screen synth-screen">
       <header className="screen-header synth-header">
-        <button
-          className="back-control"
-          onClick={() => setArea('pads')}
-          aria-label="Return to pads"
-        >
-          <ArrowLeft />
-          <span>PADS</span>
-        </button>
         <div className="screen-title">
-          <span>SOUND DESIGN · PAD {selectedPadIndex + 1}</span>
+          <span>SOUND DESIGN / SYNTHESIZER</span>
           <h1>{selectedPreset.name}</h1>
         </div>
         <button
@@ -76,22 +76,44 @@ export function SynthScreen() {
             if (event.detail === 0) triggerPad(selectedPadIndex);
           }}
         >
-          <Play /> HIT
+          <Play /> Audition
         </button>
       </header>
 
-      <div className="synth-engine-row" data-gesture-lock>
-        {(['subtractive', 'fm', 'additive'] as const).map((engine) => (
-          <button
-            key={engine}
-            className={selectedPreset.engineType === engine ? 'active' : ''}
-            aria-pressed={selectedPreset.engineType === engine}
-            onClick={() => switchEngine(engine)}
+      <div className="synth-patch-toolbar" data-gesture-lock>
+        <label>
+          <span>PAD</span>
+          <NativeSelect
+            aria-label="Sound design pad"
+            value={selectedPadIndex}
+            onChange={(event) => selectPad(Number(event.target.value))}
           >
-            <i />
-            {engine === 'fm' ? 'FM' : engine.toUpperCase()}
-          </button>
-        ))}
+            {kit.pads.map((item, index) => (
+              <NativeSelectOption key={item.id} value={index}>
+                {String(index + 1).padStart(2, '0')} · {item.label}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </label>
+        <label>
+          <span>PRESET</span>
+          <NativeSelect
+            aria-label="Sound design preset"
+            value={pad.presetId}
+            onChange={(event) => assignPreset(event.target.value)}
+          >
+            {presets.map((item) => (
+              <NativeSelectOption key={item.id} value={item.id}>
+                {item.name}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </label>
+        <span className="patch-storage-note">
+          {selectedPreset.factory
+            ? 'Factory · non-destructive edits'
+            : 'Custom sound'}
+        </span>
       </div>
 
       <nav
@@ -108,25 +130,144 @@ export function SynthScreen() {
             key={item}
             onClick={() => setSection(item)}
           >
-            {item}
+            {
+              {
+                tone: 'Synthesis',
+                envelope: 'Envelopes',
+                modulation: 'Modulation',
+                effects: 'Effects',
+                library: 'Library',
+              }[item]
+            }
           </button>
         ))}
       </nav>
 
       <div className="synth-workbench" data-gesture-lock>
-        {section === 'tone' &&
-          selectedPreset.patch.engine === 'subtractive' && (
-            <SubtractiveTone
-              patch={selectedPreset.patch}
-              update={updatePatch}
-            />
+        {section !== 'tone' && section !== 'library' && (
+          <SoundScope preset={selectedPreset} tune={pad.tune} padId={pad.id} />
+        )}
+        {section === 'tone' && (
+          <>
+            <div className="synth-overview">
+              <section className="engine-selector">
+                <header>
+                  <span>SOUND ENGINE</span>
+                  <small>ONE ACTIVE SOURCE</small>
+                </header>
+                <div className="synth-engine-row">
+                  {(['subtractive', 'fm', 'additive'] as const).map(
+                    (engine, index) => (
+                      <button
+                        key={engine}
+                        className={
+                          selectedPreset.engineType === engine ? 'active' : ''
+                        }
+                        aria-pressed={selectedPreset.engineType === engine}
+                        onClick={() => switchEngine(engine)}
+                      >
+                        <small>0{index + 1}</small>
+                        <strong>
+                          {
+                            {
+                              subtractive: 'Subtractive',
+                              fm: 'FM',
+                              additive: 'Additive',
+                            }[engine]
+                          }
+                        </strong>
+                        <span>
+                          {
+                            {
+                              subtractive: 'Oscillators + noise',
+                              fm: '4 operators',
+                              additive: 'Harmonic partials',
+                            }[engine]
+                          }
+                        </span>
+                      </button>
+                    ),
+                  )}
+                </div>
+                <p>
+                  {
+                    {
+                      subtractive:
+                        'Build a tone from oscillators and noise, then sculpt it with a filter.',
+                      fm: 'Operators modulate each other’s pitch to create metallic and complex tones.',
+                      additive:
+                        'Combine individually tuned sine partials to build a sound from its harmonics.',
+                    }[selectedPreset.engineType]
+                  }
+                </p>
+                <small className="engine-help">
+                  Choose one engine per sound. Switching recalls your edits;
+                  engines are not layered.
+                </small>
+              </section>
+              <SoundScope
+                preset={selectedPreset}
+                tune={pad.tune}
+                padId={pad.id}
+              />
+            </div>
+            <ol className="signal-path" aria-label="Sound signal path">
+              <li>
+                <span>01 / SOURCE</span>
+                <strong>
+                  {selectedPreset.engineType === 'fm'
+                    ? 'FM operators'
+                    : selectedPreset.engineType === 'additive'
+                      ? 'Partial bank'
+                      : 'Oscillator mix'}
+                </strong>
+              </li>
+              {selectedPreset.patch.engine === 'subtractive' && (
+                <li>
+                  <span>02 / SHAPE</span>
+                  <strong>
+                    {selectedPreset.patch.filter.mode.replace('pass', '-pass')}{' '}
+                    filter
+                  </strong>
+                </li>
+              )}
+              <li>
+                <span>AMPLITUDE</span>
+                <strong>ADSR envelope</strong>
+              </li>
+              <li>
+                <span>PROCESSING</span>
+                <strong>Effects + output</strong>
+              </li>
+            </ol>
+          </>
+        )}
+        <div className={section === 'tone' ? 'synthesis-layout' : undefined}>
+          <div className="source-module">
+            {section === 'tone' &&
+              selectedPreset.patch.engine === 'subtractive' && (
+                <SubtractiveTone
+                  patch={selectedPreset.patch}
+                  update={updatePatch}
+                />
+              )}
+            {section === 'tone' && selectedPreset.patch.engine === 'fm' && (
+              <FMTone patch={selectedPreset.patch} update={updatePatch} />
+            )}
+            {section === 'tone' &&
+              selectedPreset.patch.engine === 'additive' && (
+                <AdditiveTone
+                  patch={selectedPreset.patch}
+                  update={updatePatch}
+                />
+              )}
+          </div>
+          {section === 'tone' && (
+            <div className="shape-module">
+              <EnvelopePanel preset={selectedPreset} update={updatePatch} />
+            </div>
           )}
-        {section === 'tone' && selectedPreset.patch.engine === 'fm' && (
-          <FMTone patch={selectedPreset.patch} update={updatePatch} />
-        )}
-        {section === 'tone' && selectedPreset.patch.engine === 'additive' && (
-          <AdditiveTone patch={selectedPreset.patch} update={updatePatch} />
-        )}
+        </div>
         {section === 'envelope' && (
           <EnvelopePanel preset={selectedPreset} update={updatePatch} />
         )}
@@ -141,18 +282,22 @@ export function SynthScreen() {
           <EffectsPanel preset={selectedPreset} updatePreset={updatePreset} />
         )}
         {section === 'library' && (
-          <LibraryPanel
-            preset={selectedPreset}
-            presets={presets}
-            padPresetId={pad.presetId}
-            assign={assignPreset}
-            save={saveSelectedPreset}
-            duplicate={duplicateSelectedPreset}
-            reset={resetSelectedPreset}
-          />
+          <>
+            <PadTools />
+            <LibraryPanel
+              preset={selectedPreset}
+              presets={presets}
+              padPresetId={pad.presetId}
+              assign={assignPreset}
+              save={saveSelectedPreset}
+              duplicate={duplicateSelectedPreset}
+              reset={resetSelectedPreset}
+            />
+          </>
         )}
       </div>
 
+      <ModulationDock preset={selectedPreset} onSelect={setSection} />
       <footer className="synth-footer">
         <div>
           <span>ENGINE</span>
@@ -233,6 +378,27 @@ function SubtractiveTone({
         title="Oscillator bank"
         meta={`${patch.oscillators.length} OSC + NOISE`}
       >
+        <EngineVisual patch={patch} update={update} />
+        <label className="noise-type">
+          <span>NOISE SOURCE</span>
+          <NativeSelect
+            aria-label="Noise type"
+            value={patch.noise.type}
+            onChange={(event) =>
+              update((next) => {
+                if (next.engine === 'subtractive')
+                  next.noise.type = event.target
+                    .value as SubtractivePatch['noise']['type'];
+              })
+            }
+          >
+            {(['white', 'pink', 'metal'] as const).map((type) => (
+              <NativeSelectOption key={type} value={type}>
+                {type}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </label>
         {patch.oscillators.map((oscillator, index) => (
           <div className="operator-row" key={index}>
             <span className="operator-id">O{index + 1}</span>
@@ -443,6 +609,7 @@ function FMTone({
   return (
     <div className="synth-panel-stack">
       <Panel title="FM algorithm" meta={`4 OPERATORS · ALG ${patch.algorithm}`}>
+        <EngineVisual patch={patch} update={update} />
         <div className="algorithm-picker">
           {([1, 2, 3, 4, 5, 6] as const).map((algorithm) => (
             <button
@@ -455,13 +622,7 @@ function FMTone({
                 })
               }
             >
-              <span>
-                {algorithm === 6
-                  ? '••••'
-                  : algorithm < 4
-                    ? '●—●—●'
-                    : '●—●  ●—●'}
-              </span>
+              <FMGraph algorithm={algorithm} />
               ALG {algorithm}
             </button>
           ))}
@@ -487,71 +648,116 @@ function FMTone({
           />
         </div>
         {patch.operators.map((operator, index) => (
-          <div className={`operator-row fm-op op-${index}`} key={index}>
-            <span className="operator-id">OP{index + 1}</span>
-            <Mini
-              label="RATIO"
-              value={operator.ratio}
-              min={0.1}
-              max={12}
-              step={0.01}
-              onChange={(value) =>
-                update((next) => {
-                  if (next.engine === 'fm') next.operators[index].ratio = value;
-                })
-              }
-            />
-            <Mini
-              label="LEVEL"
-              value={operator.level}
-              min={0}
-              max={1.5}
-              step={0.01}
-              onChange={(value) =>
-                update((next) => {
-                  if (next.engine === 'fm') next.operators[index].level = value;
-                })
-              }
-            />
-            <Mini
-              label="FINE"
-              value={operator.fine}
-              min={-100}
-              max={100}
-              step={1}
-              onChange={(value) =>
-                update((next) => {
-                  if (next.engine === 'fm') next.operators[index].fine = value;
-                })
-              }
-            />
-            <Mini
-              label="DECAY"
-              value={operator.envelope.decay}
-              min={0.02}
-              max={3}
-              step={0.01}
-              onChange={(value) =>
-                update((next) => {
-                  if (next.engine === 'fm')
-                    next.operators[index].envelope.decay = value;
-                })
-              }
-            />
-            <Mini
-              label="FEED"
-              value={operator.feedback}
-              min={0}
-              max={1}
-              step={0.01}
-              onChange={(value) =>
-                update((next) => {
-                  if (next.engine === 'fm')
-                    next.operators[index].feedback = value;
-                })
-              }
-            />
-          </div>
+          <Fragment key={index}>
+            <div className={`operator-row fm-op op-${index}`}>
+              <span className="operator-id">OP{index + 1}</span>
+              <Mini
+                label="RATIO"
+                value={operator.ratio}
+                min={0.1}
+                max={12}
+                step={0.01}
+                onChange={(value) =>
+                  update((next) => {
+                    if (next.engine === 'fm')
+                      next.operators[index].ratio = value;
+                  })
+                }
+              />
+              <Mini
+                label="LEVEL"
+                value={operator.level}
+                min={0}
+                max={1.5}
+                step={0.01}
+                onChange={(value) =>
+                  update((next) => {
+                    if (next.engine === 'fm')
+                      next.operators[index].level = value;
+                  })
+                }
+              />
+              <Mini
+                label="FINE"
+                value={operator.fine}
+                min={-100}
+                max={100}
+                step={1}
+                onChange={(value) =>
+                  update((next) => {
+                    if (next.engine === 'fm')
+                      next.operators[index].fine = value;
+                  })
+                }
+              />
+              <Mini
+                label="DECAY"
+                value={operator.envelope.decay}
+                min={0.02}
+                max={3}
+                step={0.01}
+                onChange={(value) =>
+                  update((next) => {
+                    if (next.engine === 'fm')
+                      next.operators[index].envelope.decay = value;
+                  })
+                }
+              />
+              <Mini
+                label="FEED"
+                value={operator.feedback}
+                min={0}
+                max={1}
+                step={0.01}
+                onChange={(value) =>
+                  update((next) => {
+                    if (next.engine === 'fm')
+                      next.operators[index].feedback = value;
+                  })
+                }
+              />
+            </div>
+            <details className="operator-detail">
+              <summary>Operator {index + 1} · tuning & envelope</summary>
+              <Mini
+                label="COARSE (OCT)"
+                value={operator.coarse}
+                min={-3}
+                max={3}
+                step={1}
+                onChange={(value) =>
+                  update((next) => {
+                    if (next.engine === 'fm')
+                      next.operators[index].coarse = value;
+                  })
+                }
+              />
+              <div className="envelope-viz">
+                <EnvelopeCurve envelope={operator.envelope} />
+              </div>
+              <div className="knob-grid">
+                {(['attack', 'decay', 'sustain', 'release'] as const).map(
+                  (parameter) => (
+                    <Knob
+                      key={parameter}
+                      label={parameter.toUpperCase()}
+                      value={operator.envelope[parameter]}
+                      min={parameter === 'sustain' ? 0 : 0.001}
+                      max={parameter === 'sustain' ? 1 : 3}
+                      step={0.001}
+                      unit={parameter === 'sustain' ? '' : 's'}
+                      onChange={(value) =>
+                        update((next) => {
+                          if (next.engine === 'fm')
+                            next.operators[index].envelope[parameter] = value;
+                        })
+                      }
+                    />
+                  ),
+                )}
+              </div>
+            </details>
+          </Fragment>
         ))}
       </Panel>
     </div>
@@ -568,6 +774,7 @@ function AdditiveTone({
   return (
     <div className="synth-panel-stack">
       <Panel title="Spectral macros" meta={`${patch.partials.length} PARTIALS`}>
+        <EngineVisual patch={patch} update={update} />
         <div className="knob-grid">
           <Knob
             label="FUND"
@@ -693,11 +900,7 @@ function EnvelopePanel({
     <div className="synth-panel-stack">
       <Panel title="Amplitude envelope" meta="ADSR">
         <div className="envelope-viz">
-          <svg viewBox="0 0 300 85" aria-label="Amplitude envelope">
-            <polyline
-              points={`0,80 ${10 + amp.attack * 65},5 ${30 + (amp.attack + amp.decay) * 60},${80 - amp.sustain * 65} 240,${80 - amp.sustain * 65} 300,80`}
-            />
-          </svg>
+          <EnvelopeCurve envelope={amp} />
         </div>
         <div className="knob-grid">
           <Knob
@@ -755,6 +958,9 @@ function EnvelopePanel({
       </Panel>
       {preset.patch.engine === 'subtractive' && (
         <Panel title="Filter envelope" meta="ADSR">
+          <div className="envelope-viz">
+            <EnvelopeCurve envelope={preset.patch.filterEnvelope} />
+          </div>
           <div className="knob-grid">
             <Knob
               label="ATTACK"
@@ -824,6 +1030,17 @@ function ModulationPanel({
   updatePreset: (mutator: (preset: SynthPreset) => void) => void;
   updatePatch: (mutator: (patch: SynthPreset['patch']) => void) => void;
 }) {
+  const available = new Set([
+    'pitch',
+    'level',
+    'amplitude',
+    'pan',
+    ...(preset.engineType === 'subtractive'
+      ? ['cutoff', 'resonance']
+      : preset.engineType === 'fm'
+        ? ['fmIndex']
+        : ['spectralTilt']),
+  ]);
   return (
     <div className="synth-panel-stack">
       <Panel title="LFOs" meta="2 MODULATORS">
@@ -884,8 +1101,13 @@ function ModulationPanel({
                 'fmIndex',
                 'spectralTilt',
               ].map((destination) => (
-                <NativeSelectOption key={destination}>
+                <NativeSelectOption
+                  key={destination}
+                  value={destination}
+                  disabled={!available.has(destination)}
+                >
                   {destination}
+                  {!available.has(destination) ? ' (other engine)' : ''}
                 </NativeSelectOption>
               ))}
             </NativeSelect>
@@ -930,8 +1152,13 @@ function ModulationPanel({
                 'fmIndex',
                 'spectralTilt',
               ].map((destination) => (
-                <NativeSelectOption key={destination}>
+                <NativeSelectOption
+                  key={destination}
+                  value={destination}
+                  disabled={!available.has(destination)}
+                >
                   {destination}
+                  {!available.has(destination) ? ' (other engine)' : ''}
                 </NativeSelectOption>
               ))}
             </NativeSelect>
@@ -947,8 +1174,32 @@ function ModulationPanel({
                 })
               }
             />
+            <button
+              className="remove-route"
+              aria-label={`Remove modulation route ${index + 1}`}
+              onClick={() =>
+                updatePreset((next) => {
+                  next.modulation.splice(index, 1);
+                })
+              }
+            >
+              Remove
+            </button>
           </div>
         ))}
+        <button
+          onClick={() =>
+            updatePreset((next) => {
+              next.modulation.push({
+                source: 'lfo1',
+                destination: 'pitch',
+                amount: 0.1,
+              });
+            })
+          }
+        >
+          Add modulation route
+        </button>
       </Panel>
     </div>
   );
@@ -971,8 +1222,8 @@ function EffectsPanel({
         const effect = preset.effects[index] ?? {
           type,
           enabled: false,
-          mix: 0,
-          amount: 0,
+          mix: 0.35,
+          amount: 0.4,
         };
         return (
           <Panel
@@ -992,7 +1243,9 @@ function EffectsPanel({
                 }
               />
               <Knob
-                label="AMOUNT"
+                label={
+                  type === 'delay' || type === 'reverb' ? 'COLOR' : 'AMOUNT'
+                }
                 value={effect.amount}
                 min={0}
                 max={1}
@@ -1002,6 +1255,7 @@ function EffectsPanel({
                       (item) => item.type === type,
                     );
                     if (target) target.amount = value;
+                    else next.effects.push({ ...effect, amount: value });
                   })
                 }
               />
@@ -1016,6 +1270,7 @@ function EffectsPanel({
                       (item) => item.type === type,
                     );
                     if (target) target.mix = value;
+                    else next.effects.push({ ...effect, mix: value });
                   })
                 }
               />

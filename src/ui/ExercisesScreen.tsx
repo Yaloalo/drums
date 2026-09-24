@@ -1,13 +1,13 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ArrowUp, Check, Clock3, Flame, Play, Target } from 'lucide-react';
+import { Check, Clock3, Flame, Play, Target } from 'lucide-react';
 import { EXERCISES, PROGRESSION } from '../training/exercises';
 import type { Exercise } from '../model/types';
 import { useApp } from '../state/AppContext';
 
 export function ExercisesScreen() {
-  const { setArea, startExercise, lastAttempt, attempts } = useApp();
+  const { startExercise, lastAttempt, attempts } = useApp();
   const categories = useMemo(
     () => Array.from(new Set(EXERCISES.map((exercise) => exercise.category))),
     [],
@@ -30,14 +30,6 @@ export function ExercisesScreen() {
           <span>RHYTHM LAB · {EXERCISES.length} SESSIONS</span>
           <h1>Practice with purpose.</h1>
         </div>
-        <button
-          className="back-control vertical"
-          aria-label="Return to pads"
-          onClick={() => setArea('pads')}
-        >
-          <ArrowUp />
-          <span>PADS</span>
-        </button>
       </header>
 
       {lastAttempt && (

@@ -1,6 +1,6 @@
 'use client';
 
-import { Circle, Pause, Play, Square, TimerReset } from 'lucide-react';
+import { Pause, Play } from 'lucide-react';
 import { useApp } from '../state/AppContext';
 
 export function TransportBar({ compact = false }: { compact?: boolean }) {
@@ -17,14 +17,13 @@ export function TransportBar({ compact = false }: { compact?: boolean }) {
         aria-label={transport.playing ? 'Pause sequence' : 'Play sequence'}
       >
         {transport.playing ? <Pause /> : <Play />}
+        {transport.playing ? 'Pause' : 'Play'}
       </button>
-      <button
-        className="transport-icon"
-        onClick={stopTransport}
-        aria-label="Stop sequence"
-      >
-        <Square />
-      </button>
+      {!compact && (
+        <button onClick={stopTransport} aria-label="Stop sequence">
+          Stop
+        </button>
+      )}
       <label className="tempo-control">
         <input
           aria-label="Tempo"
@@ -41,22 +40,6 @@ export function TransportBar({ compact = false }: { compact?: boolean }) {
         />
         <span>BPM</span>
       </label>
-      <button
-        className={`transport-icon ${transport.metronome ? 'is-active' : ''}`}
-        onClick={() => updateTransport({ metronome: !transport.metronome })}
-        aria-label="Toggle metronome"
-        aria-pressed={transport.metronome}
-      >
-        <TimerReset />
-      </button>
-      <button
-        className={`transport-icon record ${transport.recording ? 'is-active' : ''}`}
-        onClick={() => updateTransport({ recording: !transport.recording })}
-        aria-label="Toggle recording"
-        aria-pressed={transport.recording}
-      >
-        <Circle />
-      </button>
     </div>
   );
 }

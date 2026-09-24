@@ -239,6 +239,8 @@ input[type='number'],
   touch-action: none;
 }
 .brand {
+  display: flex;
+  align-items: center;
   border: 0;
   background: transparent;
   padding: 0;
@@ -327,8 +329,95 @@ input[type='number'],
   align-items: center;
   gap: 6px;
 }
+.tempo-control input::-webkit-inner-spin-button,
+.tempo-control input::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+.metronome-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.metronome-control button {
+  gap: 8px;
+  color: var(--muted);
+  background: transparent;
+}
+.metronome-control button.enabled {
+  color: var(--accent);
+  background: var(--accent-light);
+  border-color: var(--accent-border);
+}
+.metronome-control small {
+  font-size: 9px;
+  letter-spacing: 0.6px;
+}
+.metronome-led {
+  width: 6px;
+  height: 6px;
+  background: var(--muted);
+  border-radius: 50%;
+}
+.enabled .metronome-led {
+  background: var(--accent);
+}
+.metronome-beats {
+  display: flex;
+  gap: 5px;
+}
+.metronome-beats i {
+  font-style: normal;
+  display: grid;
+  place-items: center;
+  width: 19px;
+  height: 22px;
+  border-bottom: 2px solid var(--line);
+  color: var(--muted);
+  font-size: 10px;
+}
+.metronome-beats i.lit {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
+}
+.metronome-beats i:first-child.lit {
+  border-color: var(--chord);
+  color: var(--chord);
+  background: var(--chord-light);
+}
+.metronome-meter {
+  color: var(--muted);
+  font-size: 10px;
+  margin-left: auto;
+}
+.sequence-practice-tools {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.recording-enabled {
+  color: var(--chord);
+  border-color: var(--chord);
+  background: var(--chord-light);
+}
+@media (max-width: 370px) {
+  .metronome-control {
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .metronome-beats {
+    gap: 3px;
+  }
+  .metronome-beats i {
+    width: 16px;
+  }
+}
 .transport-bar button {
-  width: 40px;
+  width: auto;
   min-height: 40px;
   padding: 8px;
 }
@@ -363,6 +452,7 @@ input[type='number'],
   padding: 0 6px;
 }
 .tempo-control input {
+  appearance: textfield;
   width: 56px;
   padding: 6px;
   font-size: 17px;
@@ -419,12 +509,14 @@ input[type='number'],
   height: 20px;
   background: var(--surface);
 }
-.bottom-panel {
+.bottom-panel[data-slot='dialog-content'] {
   position: fixed;
   z-index: 60;
   top: auto;
   display: block;
   translate: none;
+  --tw-translate-x: 0;
+  --tw-translate-y: 0;
   max-width: 580px;
   animation: none;
   bottom: 0;
@@ -561,8 +653,7 @@ input[type='number'],
   .transport-bar button {
     min-height: 44px;
   }
-  .icon-button,
-  .transport-bar button {
+  .icon-button {
     width: 44px;
   }
   [data-slot='switch'] {

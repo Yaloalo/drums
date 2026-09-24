@@ -54,9 +54,11 @@ The screens form one spatial workspace:
 - Swipe down on Pads for Exercises; swipe up to return.
 - Swipe up on Pads for the Song Mode placeholder; swipe down to return.
 
-Swipes can start away from the screen edge. Interactive controls lock navigation gestures so playing pads, painting steps, and moving synth controls do not change screens. Every surrounding screen also has a compact Pads fallback control.
+Navigation is swipe-only. Swipe across the app header or a screen heading, away from the screen edge. On desktop, click-drag across the header. Interactive controls lock navigation gestures so playing pads, painting steps, scrolling a synth panel, and moving synth controls do not change screens. There are no back buttons or directional navigation controls.
 
 The transport belongs to the application, not the Drum Machine screen. Start a pattern, return to Pads, perform over it, and edit its sounds without stopping playback.
+
+The labelled **Metronome** control works independently of sequence playback. It shares the BPM, follows the current pattern's meter, accents beat one, and displays beat indicators against the audio clock. Swing affects drum steps, not the reference click. Stopping or pausing the sequence leaves the metronome running; turn its own control off to silence it. Recording is armed with **Record pads** in the Drum Machine.
 
 ## Sound design
 
@@ -67,6 +69,12 @@ All 50 factory percussion sounds are parameter presets for three reusable Web Au
 - Additive: multiple editable partials, independent decay/detune, spectral tilt, spread, and inharmonicity.
 
 The compact effects stage provides drive, bit crushing, compression, delay, and reverb routing. Factory sounds and kits are deeply frozen. Editing a factory sound creates a temporary session override until **Save as new** or **Duplicate** is chosen, so factory content is never overwritten.
+
+The sound-design workspace takes its visual organization from modular software synthesizers such as Pigments: source selection, a rendered output waveform, an explicit signal path, detailed engine modules, envelope curves, and a modulation-source strip. This is not a Pigments emulation. Each pad uses **one active engine**, not three layers. Switching engines keeps the inactive patches as editable drafts; switching back recalls them. Saved custom presets include those drafts.
+
+Subtractive oscillators have waveform displays; the FM diagrams and audio graph share the same algorithm definitions; additive partial bars are directly editable. The output preview runs through the real voice/effects graph and refreshes after edits. Noise and random modulation mean the preview represents the patch rather than an identical sample for every hit. Changes are heard on the next hit, including hits from an already-running sequence.
+
+The modulation matrix accepts LFO, envelope, velocity and random-per-trigger routes, with engine-dependent destinations. FM operator tuning and full ADSR controls expand within each operator. Effect Mix is dry/wet for drive, amplitude-quantizing bit crush, and compression; delay/reverb use shared sends with a Color low-pass control. Pad naming, tuning, mute, ordering, and kit/backup tools are available in **Synthesizer → Library**.
 
 ## Drum Machine and training
 
@@ -83,13 +91,13 @@ npm run build
 npm run start
 ```
 
-On Android Chrome, open the browser menu and choose **Install app** or **Add to Home screen**. The manifest launches Pulse Foundry standalone. The service worker caches the app shell and then caches bundled build assets as they are requested. Launch the installed app once while online; subsequent sessions, synth presets, and locally stored user content work without a connection.
+On Android Chrome, open the browser menu and choose **Install app** or **Add to Home screen**. The manifest launches Pulse Foundry standalone. The production postbuild script injects every bundled JavaScript, CSS, and font asset into the service worker's precache and creates a content-derived cache revision. Installation completes only after the shell and bundles are cached, independently of the browser's HTTP cache. Launch the installed app once while online; subsequent sessions, synth presets, and locally stored user content work without a connection. Use `npm run build` (including its postbuild step) before deploying.
 
 If a new release appears stale, close all installed/browser windows for the app and reopen it so the service worker can activate the latest cache.
 
 ## Persistence and data portability
 
-IndexedDB stores custom sounds, kits, patterns, exercise attempts, the current session, tempo, swing, and last area. The Pads editor exposes JSON export/import. Exported data contains only user-owned and session records; factory libraries stay in the application bundle.
+IndexedDB stores custom sounds, kits, patterns, exercise attempts, the current session, tempo, swing, and last area. **Synthesizer → Library → Kit & backup** exposes JSON export/import. Exported data contains only user-owned and session records; factory libraries stay in the application bundle.
 
 No backend, account, analytics service, or network audio asset is required.
 

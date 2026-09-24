@@ -9,6 +9,7 @@ import { cloneKit, clonePreset, FACTORY_KITS, FACTORY_PRESETS } from '../presets
 import { RHYTHM_PRESETS, rhythmById } from '../presets/rhythms';
 import { scorePerformance } from '../training/scoring';
 import { TransportService } from '../transport/TransportService';
+import { selectEngine } from '../audio/synthTopology';
 import { resizePattern, secondsPerBeat } from '../transport/timing';
 
 export type Area = 'pads' | 'synth' | 'sequencer' | 'exercises' | 'song';
@@ -203,7 +204,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const duplicateSelectedPreset = useCallback(() => saveSelectedPreset(`${selectedPreset.name} Copy`), [saveSelectedPreset, selectedPreset.name]);
   const switchEngine = useCallback((engine: SynthEngineType) => {
     const source = FACTORY_PRESETS.find((item) => item.engineType === engine)!;
-    updateSelectedPreset({ ...cloneSerializable(source), id: selectedPreset.id, name: selectedPreset.name, factory: false });
+    updateSelectedPreset(selectEngine(selectedPreset, engine, source));
   }, [selectedPreset, updateSelectedPreset]);
 
   const updateTransport = useCallback((patch: Partial<TransportState>) => transportService.update(patch), [transportService]);

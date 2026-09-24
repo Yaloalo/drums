@@ -155,16 +155,12 @@ function Workspace() {
       }}
     >
       <header className="app-header">
-        <button
-          className="brand"
-          onClick={() => setArea('pads')}
-          aria-label="Pulse Foundry · return to pads"
-        >
+        <div className="brand">
           <AudioLines />
           <span>
             Pulse Foundry<small>RHYTHM INSTRUMENT</small>
           </span>
-        </button>
+        </div>
         <span className="workspace-status">
           <i className={transport.playing ? 'running' : ''} />
           {transport.playing ? 'Sequence playing' : 'Ready to play'}

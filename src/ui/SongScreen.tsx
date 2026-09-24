@@ -1,20 +1,10 @@
 'use client';
 
-import { ArrowDown, Construction } from 'lucide-react';
-import { useApp } from '../state/AppContext';
+import { Construction } from 'lucide-react';
 
 export function SongScreen() {
-  const { setArea } = useApp();
   return (
     <section className="screen song-screen">
-      <button
-        className="back-control song-back"
-        aria-label="Return to pads"
-        onClick={() => setArea('pads')}
-      >
-        <ArrowDown />
-        <span>PADS</span>
-      </button>
       <div className="song-placeholder">
         <Construction />
         <span>SONG MODE</span>
@@ -23,7 +13,6 @@ export function SongScreen() {
           This space is intentionally empty — the instrument, sound design,
           sequencing and training systems are ready below it.
         </p>
-        <button onClick={() => setArea('pads')}>RETURN TO PADS</button>
       </div>
     </section>
   );

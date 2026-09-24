@@ -31,13 +31,7 @@ function getPreview(key: string): Promise<WaveformPreview> {
   return next;
 }
 
-export const PadWaveform = memo(function PadWaveform({
-  preset,
-  tune,
-}: {
-  preset: SynthPreset;
-  tune: number;
-}) {
+export function useSoundPreview(preset: SynthPreset, tune: number) {
   const key = JSON.stringify({ preset, tune });
   const [rendered, setRendered] = useState<{
     key: string;
@@ -45,23 +39,36 @@ export const PadWaveform = memo(function PadWaveform({
   } | null>(null);
   useEffect(() => {
     let cancelled = false;
-    void getPreview(key)
-      .then((preview) => {
-        if (!cancelled) setRendered({ key, preview });
-      })
-      .catch(() => undefined);
+    const timer = window.setTimeout(() => {
+      void getPreview(key)
+        .then((preview) => {
+          if (!cancelled) setRendered({ key, preview });
+        })
+        .catch(() => undefined);
+    }, 90);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [key]);
-  const preview = rendered?.key === key ? rendered.preview : null;
+  return { preview: rendered?.preview ?? null, pending: rendered?.key !== key };
+}
+
+export const PadWaveform = memo(function PadWaveform({
+  preset,
+  tune,
+}: {
+  preset: SynthPreset;
+  tune: number;
+}) {
+  const { preview, pending } = useSoundPreview(preset, tune);
   return (
     <svg
       className="pad-waveform"
       viewBox="0 0 160 64"
       preserveAspectRatio="none"
       aria-hidden="true"
-      data-ready={!!preview}
+      data-ready={!!preview && !pending}
     >
       <line className="waveform-axis" x1="0" y1="32" x2="160" y2="32" />
       {preview && <path className="waveform-signal" d={preview.path} />}

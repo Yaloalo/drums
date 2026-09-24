@@ -110,6 +110,8 @@ export interface SynthPreset {
   factory: boolean;
   engineType: SynthEngineType;
   patch: SynthPatch;
+  /** Inactive engine drafts are retained, not layered into the active voice. */
+  engineDrafts?: Partial<Record<SynthEngineType, SynthPatch>>;
   modulation: ModulationRoute[];
   effects: EffectDefinition[];
   macros: MacroMapping[];
@@ -233,6 +235,7 @@ export interface TransportState {
   loop: boolean;
   swing: number;
   metronome: boolean;
+  metronomeBeat?: number;
   recording: boolean;
   overdub: boolean;
   quantize: boolean;

@@ -1,3 +1,4 @@
+import { FM_ALGORITHMS } from './synthTopology';
 import type {
   AdditivePatch,
   Envelope,
@@ -19,6 +20,8 @@ interface VoiceNodes {
   sources: AudioScheduledSourceNode[];
   nodes: AudioNode[];
   stopAt: number;
+  modulationGain: AudioParam;
+  pan: AudioParam;
 }
 
 export class AudioEngine {
@@ -36,6 +39,7 @@ export class AudioEngine {
   private noiseBuffers = new Map<string, AudioBuffer>();
   private activeVoices = new Set<VoiceNodes>();
   private maxVoices = 48;
+  private clicks = new Set<OscillatorNode>();
 
   get currentTime(): number {
     return this.context?.currentTime ?? 0;
@@ -161,8 +165,19 @@ export class AudioEngine {
     gain.gain.exponentialRampToValueAtTime(accent ? 0.16 : 0.1, time + 0.001);
     gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.035);
     oscillator.connect(gain).connect(this.master);
+    this.clicks.add(oscillator);
+    oscillator.onended = () => {
+      this.clicks.delete(oscillator);
+      oscillator.disconnect();
+      gain.disconnect();
+    };
     oscillator.start(time);
     oscillator.stop(time + 0.04);
+  }
+
+  cancelClicks() {
+    this.clicks.forEach((click) => click.stop());
+    this.clicks.clear();
   }
 
   private triggerSubtractive(
@@ -177,14 +192,32 @@ export class AudioEngine {
     const filter = context.createBiquadFilter();
     filter.type = patch.filter.mode;
     filter.Q.setValueAtTime(patch.filter.resonance, time);
-    const cutoff = Math.max(40, Math.min(19000, patch.filter.cutoff));
-    filter.frequency.setValueAtTime(
-      Math.max(40, Math.min(19000, cutoff + patch.filter.envelopeAmount)),
-      time,
+    const cutoff = Math.max(
+      40,
+      Math.min(
+        19000,
+        patch.filter.cutoff *
+          2 ** (((options.tune ?? 0) / 12) * patch.filter.keyTracking),
+      ),
+    );
+    const filterLevel = (level: number) =>
+      Math.max(
+        40,
+        Math.min(19000, cutoff + patch.filter.envelopeAmount * level),
+      );
+    const env = patch.filterEnvelope;
+    filter.frequency.setValueAtTime(cutoff, time);
+    filter.frequency.exponentialRampToValueAtTime(
+      filterLevel(1),
+      time + Math.max(0.001, env.attack),
+    );
+    filter.frequency.exponentialRampToValueAtTime(
+      filterLevel(env.sustain),
+      time + Math.max(0.001, env.attack) + Math.max(0.005, env.decay),
     );
     filter.frequency.exponentialRampToValueAtTime(
       cutoff,
-      time + Math.max(0.01, patch.filterEnvelope.decay),
+      time + this.envelopeLength(env),
     );
     this.scheduleEnvelope(
       output.gain,
@@ -235,8 +268,8 @@ export class AudioEngine {
       voice.sources.push(noise);
       voice.nodes.push(gain);
     }
-    this.attachLfos(
-      patch.lfos,
+    this.attachModulation(
+      preset,
       voice,
       {
         pitch: voice.sources
@@ -250,6 +283,7 @@ export class AudioEngine {
         amplitude: [output.gain],
       },
       time,
+      velocity,
     );
     this.trackVoice(voice);
   }
@@ -289,74 +323,54 @@ export class AudioEngine {
       );
       return oscillator;
     });
+    const topology = FM_ALGORITHMS[patch.algorithm];
     const operatorGains = patch.operators.map((operator, index) => {
       const gain = context.createGain();
       this.scheduleEnvelope(
         gain.gain,
         operator.envelope,
         time,
-        operator.level * (index === 0 ? velocity : patch.baseFrequency),
+        operator.level *
+          (topology.carriers.includes(index)
+            ? 1 / topology.carriers.length
+            : patch.baseFrequency),
       );
       oscillators[index].connect(gain);
       return gain;
     });
     const mod = (from: number, to: number) =>
       operatorGains[from].connect(oscillators[to].frequency);
-    const carriers = new Set<number>();
-    if (patch.algorithm === 1) {
-      mod(3, 2);
-      mod(2, 1);
-      mod(1, 0);
-      carriers.add(0);
-    }
-    if (patch.algorithm === 2) {
-      mod(3, 1);
-      mod(2, 1);
-      mod(1, 0);
-      carriers.add(0);
-    }
-    if (patch.algorithm === 3) {
-      mod(3, 2);
-      mod(2, 0);
-      mod(1, 0);
-      carriers.add(0);
-    }
-    if (patch.algorithm === 4) {
-      mod(1, 0);
-      mod(3, 2);
-      carriers.add(0).add(2);
-    }
-    if (patch.algorithm === 5) {
-      mod(1, 0);
-      mod(2, 0);
-      mod(3, 0);
-      carriers.add(0);
-    }
-    if (patch.algorithm === 6) carriers.add(0).add(1).add(2).add(3);
-    carriers.forEach((index) => operatorGains[index].connect(output));
+    topology.links.forEach(([from, to]) => mod(from, to));
+    topology.carriers.forEach((index) => operatorGains[index].connect(output));
     patch.operators.forEach((operator, index) => {
       if (operator.feedback > 0) {
         const feedback = context.createGain();
         feedback.gain.value = operator.feedback * patch.baseFrequency;
-        operatorGains[index]
+        const feedbackDelay = context.createDelay(1);
+        feedbackDelay.delayTime.value = 1 / context.sampleRate;
+        oscillators[index]
+          .connect(feedbackDelay)
           .connect(feedback)
           .connect(oscillators[index].frequency);
-        voice.nodes.push(feedback);
+        voice.nodes.push(feedback, feedbackDelay);
       }
       oscillators[index].start(time);
       oscillators[index].stop(voice.stopAt);
     });
     voice.sources.push(...oscillators);
     voice.nodes.push(...operatorGains);
-    this.attachLfos(
-      patch.lfos,
+    this.attachModulation(
+      preset,
       voice,
       {
         pitch: oscillators.map((oscillator) => oscillator.detune),
-        fmIndex: operatorGains.slice(1).map((gain) => gain.gain),
+        fmIndex: operatorGains
+          .filter((_, index) => !topology.carriers.includes(index))
+          .map((gain) => gain.gain),
         amplitude: [output.gain],
       },
       time,
+      velocity,
     );
     this.trackVoice(voice);
   }
@@ -384,6 +398,7 @@ export class AudioEngine {
       time,
       this.envelopeLength(patch.ampEnvelope),
     );
+    const tiltParams: AudioParam[] = [];
     patch.partials.forEach((partial, index) => {
       const oscillator = context.createOscillator();
       const gain = context.createGain();
@@ -394,10 +409,13 @@ export class AudioEngine {
         patch.baseFrequency * 2 ** ((options.tune ?? 0) / 12) * ratio,
       );
       oscillator.detune.value = partial.detune;
-      const tilted =
-        partial.amplitude *
-        Math.max(0.06, 1 - patch.spectralTilt * index * 0.12);
-      gain.gain.setValueAtTime(Math.max(0.0001, tilted), time);
+      const tiltGain = context.createGain();
+      tiltGain.gain.value = Math.max(
+        0.06,
+        1 - patch.spectralTilt * index * 0.12,
+      );
+      if (index > 0) tiltParams.push(tiltGain.gain);
+      gain.gain.setValueAtTime(Math.max(0.0001, partial.amplitude), time);
       gain.gain.exponentialRampToValueAtTime(
         0.0001,
         time + Math.max(0.03, partial.decay),
@@ -409,14 +427,18 @@ export class AudioEngine {
           ((index % 2 ? 1 : -1) * patch.spread * index) / patch.partials.length,
         ),
       );
-      oscillator.connect(gain).connect(panner).connect(output);
+      oscillator
+        .connect(gain)
+        .connect(tiltGain)
+        .connect(panner)
+        .connect(output);
       oscillator.start(time);
       oscillator.stop(voice.stopAt);
       voice.sources.push(oscillator);
-      voice.nodes.push(gain, panner);
+      voice.nodes.push(gain, panner, tiltGain);
     });
-    this.attachLfos(
-      patch.lfos,
+    this.attachModulation(
+      preset,
       voice,
       {
         pitch: voice.sources
@@ -426,8 +448,10 @@ export class AudioEngine {
           )
           .map((oscillator) => oscillator.detune),
         amplitude: [output.gain],
+        spectralTilt: tiltParams,
       },
       time,
+      velocity,
     );
     this.trackVoice(voice);
   }
@@ -443,19 +467,47 @@ export class AudioEngine {
     const context = this.context!;
     const panner = context.createStereoPanner();
     panner.pan.setValueAtTime(Math.max(-1, Math.min(1, pan)), time);
-    const driveDefinition = preset.effects.find(
-      (effect) => effect.type === 'drive' && effect.enabled,
-    );
-    let tail: AudioNode = output;
-    const nodes: AudioNode[] = [output, panner];
+    const modulationGain = context.createGain();
+    modulationGain.gain.value = 1;
+    output.connect(modulationGain);
+    let tail: AudioNode = modulationGain;
+    const nodes: AudioNode[] = [output, panner, modulationGain];
     if (input !== output) input.connect(output);
-    if (driveDefinition) {
-      const drive = context.createWaveShaper();
-      drive.curve = this.driveCurve(1 + driveDefinition.amount * 18);
-      drive.oversample = '2x';
-      tail.connect(drive);
-      tail = drive;
-      nodes.push(drive);
+    for (const effect of preset.effects.filter(
+      (item) =>
+        item.enabled && ['drive', 'bitcrush', 'compressor'].includes(item.type),
+    )) {
+      let processor: AudioNode;
+      if (effect.type === 'compressor') {
+        const compressor = context.createDynamicsCompressor();
+        compressor.threshold.value = -6 - effect.amount * 34;
+        compressor.ratio.value = 1 + effect.amount * 11;
+        compressor.attack.value = 0.003;
+        compressor.release.value = 0.1;
+        processor = compressor;
+      } else {
+        const shaper = context.createWaveShaper();
+        if (effect.type === 'drive') {
+          shaper.curve = this.driveCurve(1 + effect.amount * 18);
+          shaper.oversample = '2x';
+        } else {
+          const levels = 2 ** Math.round(12 - effect.amount * 10);
+          shaper.curve = Float32Array.from(
+            { length: 4096 },
+            (_, i) => Math.round(((i / 4095) * 2 - 1) * levels) / levels,
+          );
+        }
+        processor = shaper;
+      }
+      const dry = context.createGain();
+      const wet = context.createGain();
+      const mix = context.createGain();
+      dry.gain.value = 1 - effect.mix;
+      wet.gain.value = effect.mix;
+      tail.connect(dry).connect(mix);
+      tail.connect(processor).connect(wet).connect(mix);
+      tail = mix;
+      nodes.push(processor, dry, wet, mix);
     }
     tail.connect(panner).connect(this.master!);
     const delayDefinition = preset.effects.find(
@@ -463,23 +515,29 @@ export class AudioEngine {
     );
     if (delayDefinition && this.delay) {
       const send = context.createGain();
+      const color = context.createBiquadFilter();
+      color.frequency.value = 600 + delayDefinition.amount * 15000;
       send.gain.value = delayDefinition.mix;
-      tail.connect(send).connect(this.delay);
-      nodes.push(send);
+      tail.connect(color).connect(send).connect(this.delay);
+      nodes.push(send, color);
     }
     const reverbDefinition = preset.effects.find(
       (effect) => effect.type === 'reverb' && effect.enabled,
     );
     if (reverbDefinition && this.reverb) {
       const send = context.createGain();
+      const color = context.createBiquadFilter();
+      color.frequency.value = 600 + reverbDefinition.amount * 15000;
       send.gain.value = reverbDefinition.mix;
-      tail.connect(send).connect(this.reverb);
-      nodes.push(send);
+      tail.connect(color).connect(send).connect(this.reverb);
+      nodes.push(send, color);
     }
     return {
       sources: [],
       nodes,
       stopAt: time + Math.min(6, Math.max(0.08, duration + 0.08)),
+      modulationGain: modulationGain.gain,
+      pan: panner.pan,
     };
   }
 
@@ -516,29 +574,85 @@ export class AudioEngine {
     );
   }
 
-  private attachLfos(
-    lfos: SubtractivePatch['lfos'],
+  private attachModulation(
+    preset: SynthPreset,
     voice: VoiceNodes,
     destinations: Partial<Record<string, AudioParam[]>>,
     time: number,
+    velocity: number,
   ) {
     const context = this.context!;
-    lfos.forEach((definition) => {
-      if (definition.depth === 0) return;
-      const targets = destinations[definition.destination];
-      if (!targets?.length) return;
+    // Volume modulation sits after the amplitude envelope, so it never opens
+    // a decaying voice back up or bypasses a pad's volume/mute setting.
+    const targets = {
+      ...destinations,
+      amplitude: [voice.modulationGain],
+      level: [voice.modulationGain],
+      pan: [voice.pan],
+    };
+    const scales: Record<string, number> = {
+      pitch: 1200,
+      cutoff: 5000,
+      resonance: 8,
+      amplitude: 0.5,
+      level: 0.5,
+      pan: 1,
+      fmIndex: preset.patch.baseFrequency,
+      spectralTilt: -0.12,
+    };
+    const routeSignal = (
+      source: AudioScheduledSourceNode,
+      destination: string,
+      amount: number,
+    ) => {
+      const params = targets[destination as keyof typeof targets];
+      if (!params?.length || amount === 0) return;
+      params.forEach((param, index) => {
+        const gain = context.createGain();
+        gain.gain.value =
+          amount *
+          (scales[destination] ?? 1) *
+          (destination === 'spectralTilt' ? index + 1 : 1);
+        source.connect(gain).connect(param);
+        voice.nodes.push(gain);
+      });
+      source.start(time);
+      source.stop(voice.stopAt);
+      voice.sources.push(source);
+    };
+    const createLfo = (index: number) => {
+      const definition = preset.patch.lfos[index];
+      if (!definition) return null;
       const oscillator = context.createOscillator();
-      const gain = context.createGain();
       oscillator.type = definition.shape;
       oscillator.frequency.value = definition.rate;
-      gain.gain.value =
-        definition.depth * (definition.destination === 'pitch' ? 100 : 1);
-      oscillator.connect(gain);
-      targets.forEach((target) => gain.connect(target));
-      oscillator.start(time);
-      oscillator.stop(voice.stopAt);
-      voice.sources.push(oscillator);
-      voice.nodes.push(gain);
+      return oscillator;
+    };
+    preset.patch.lfos.forEach((definition, index) => {
+      if (definition.depth === 0) return;
+      const oscillator = createLfo(index)!;
+      routeSignal(oscillator, definition.destination, definition.depth);
+    });
+    preset.modulation.forEach((route) => {
+      if (route.amount === 0) return;
+      if (route.source === 'lfo1' || route.source === 'lfo2') {
+        const oscillator = createLfo(route.source === 'lfo1' ? 0 : 1);
+        if (oscillator)
+          routeSignal(oscillator, route.destination, route.amount);
+        return;
+      }
+      const source = context.createConstantSource();
+      if (route.source === 'ampEnv' || route.source === 'modEnv') {
+        const envelope =
+          route.source === 'modEnv' && preset.patch.engine === 'subtractive'
+            ? preset.patch.filterEnvelope
+            : preset.patch.ampEnvelope;
+        this.scheduleEnvelope(source.offset, envelope, time, 1);
+      } else {
+        source.offset.value =
+          route.source === 'random' ? Math.random() * 2 - 1 : velocity - 1;
+      }
+      routeSignal(source, route.destination, route.amount);
     });
   }
 
