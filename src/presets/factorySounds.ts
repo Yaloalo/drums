@@ -1,5 +1,14 @@
-import type { AdditivePatch, DrumKit, FMPatch, SubtractivePatch, SynthPreset } from '../model/types.ts';
+import type { DrumKit, SynthPreset, VoiceArchitecture } from '../model/types.ts';
 import { cloneSerializable, deepFreeze } from '../model/types.ts';
+import {
+  defaultFilter,
+  defaultSlot,
+  normalizePreset,
+  sourceFromLegacy,
+  type LegacyAdditivePatch,
+  type LegacyFMPatch,
+  type LegacySubtractivePatch,
+} from '../model/voice.ts';
 
 const env = (attack: number, decay: number, sustain = 0, release = 0.04) => ({ attack, decay, sustain, release });
 const lfos = () => [
@@ -7,7 +16,9 @@ const lfos = () => [
   { shape: 'triangle' as const, rate: 2, depth: 0, sync: true, destination: 'pan' as const },
 ];
 
-function subtractive(baseFrequency: number, decay: number, options: Partial<SubtractivePatch> = {}): SubtractivePatch {
+// The single-engine library is written in the original one-engine shape and
+// migrated like saved user presets, which keeps both paths identical.
+function subtractive(baseFrequency: number, decay: number, options: Partial<LegacySubtractivePatch> = {}): LegacySubtractivePatch {
   return {
     engine: 'subtractive',
     baseFrequency,
@@ -25,7 +36,7 @@ function subtractive(baseFrequency: number, decay: number, options: Partial<Subt
   };
 }
 
-function fm(baseFrequency: number, decay: number, algorithm: FMPatch['algorithm'], ratios: number[]): FMPatch {
+function fm(baseFrequency: number, decay: number, algorithm: LegacyFMPatch['algorithm'], ratios: number[]): LegacyFMPatch {
   return {
     engine: 'fm', baseFrequency, algorithm,
     operators: ratios.map((ratio, index) => ({ ratio, coarse: 0, fine: index * 2, level: index === 0 ? 0.85 : 0.45 - index * 0.06, feedback: index === 3 ? 0.18 : 0, envelope: env(0.001 + index * 0.001, decay * (1 - index * 0.12), 0, 0.04) })),
@@ -34,7 +45,7 @@ function fm(baseFrequency: number, decay: number, algorithm: FMPatch['algorithm'
   };
 }
 
-function additive(baseFrequency: number, decay: number, ratios: number[], tilt = 0.55, inharmonicity = 0): AdditivePatch {
+function additive(baseFrequency: number, decay: number, ratios: number[], tilt = 0.55, inharmonicity = 0): LegacyAdditivePatch {
   return {
     engine: 'additive', baseFrequency,
     partials: ratios.map((ratio, index) => ({ ratio, amplitude: Math.max(0.04, 0.82 / (index + 1)), decay: decay * (1 + index * 0.11), detune: index % 2 ? 2 : -2 })),
@@ -43,7 +54,7 @@ function additive(baseFrequency: number, decay: number, ratios: number[], tilt =
   };
 }
 
-type Spec = { name: string; category: string; tags: string[]; patch: SubtractivePatch | FMPatch | AdditivePatch; drive?: number; reverb?: number };
+type Spec = { name: string; category: string; tags: string[]; patch: LegacySubtractivePatch | LegacyFMPatch | LegacyAdditivePatch; drive?: number; reverb?: number };
 
 const specs: Spec[] = [
   { name: 'Deep 808', category: 'Kick', tags: ['sub', 'long', 'classic'], patch: subtractive(49, .72, { pitchEnvelope: { amount: 44, decay: .075 }, filter: { mode: 'lowpass', cutoff: 900, resonance: 1.2, envelopeAmount: 400, keyTracking: 0 } }), drive: .2 },
@@ -102,29 +113,98 @@ const specs: Spec[] = [
 
 function slug(name: string) { return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''); }
 
-export const FACTORY_PRESETS: readonly SynthPreset[] = deepFreeze(specs.map((spec) => ({
-  id: `factory-${slug(spec.name)}`,
-  name: spec.name,
-  category: spec.category,
-  tags: spec.tags,
-  factory: true,
-  engineType: spec.patch.engine,
-  patch: spec.patch,
-  modulation: [
-    { source: 'velocity', destination: 'amplitude', amount: .8 },
-    { source: 'random', destination: 'pitch', amount: spec.category === 'Shaker' ? .14 : .02 },
-  ],
-  effects: [
-    { type: 'drive', enabled: Boolean(spec.drive), mix: spec.drive ?? 0, amount: spec.drive ?? 0 },
-    { type: 'reverb', enabled: Boolean(spec.reverb), mix: spec.reverb ?? 0, amount: spec.reverb ?? 0 },
-  ],
-  macros: [
-    { name: 'Body', destination: 'patch.baseFrequency', min: .7, max: 1.4 },
-    { name: 'Decay', destination: 'patch.ampEnvelope.decay', min: .2, max: 2.4 },
-    { name: 'Edge', destination: 'effects.drive.amount', min: 0, max: 1 },
-  ],
-  version: 1,
-})));
+function presetBase(spec: { name: string; category: string; tags: string[]; drive?: number; reverb?: number }): Omit<SynthPreset, 'voice'> {
+  return {
+    id: `factory-${slug(spec.name)}`,
+    name: spec.name,
+    category: spec.category,
+    tags: spec.tags,
+    factory: true,
+    modulation: [
+      { source: 'velocity', destination: 'amplitude', amount: .8 },
+      { source: 'random', destination: 'pitch', amount: spec.category === 'Shaker' ? .14 : .02 },
+    ],
+    effects: [
+      { type: 'drive', enabled: Boolean(spec.drive), mix: spec.drive ?? 0, amount: spec.drive ?? 0 },
+      { type: 'reverb', enabled: Boolean(spec.reverb), mix: spec.reverb ?? 0, amount: spec.reverb ?? 0 },
+    ],
+    macros: [
+      { name: 'Body', destination: 'voice.engines.0.patch.baseFrequency', min: .7, max: 1.4 },
+      { name: 'Decay', destination: 'voice.engines.0.patch.ampEnvelope.decay', min: .2, max: 2.4 },
+      { name: 'Edge', destination: 'effects.drive.amount', min: 0, max: 1 },
+    ],
+    version: 1,
+  };
+}
+
+const silent = (waveform: 'sine' | 'triangle' | 'sawtooth' | 'square', level = 0, octave = 0, semitone = 0) => ({ waveform, octave, semitone, fine: 0, level, phase: 0, retrigger: true });
+
+interface LayeredSpec {
+  name: string; category: string; tags: string[]; drive?: number; reverb?: number;
+  one: { patch: LegacySubtractivePatch | LegacyFMPatch | LegacyAdditivePatch; level?: number; filterMix?: number };
+  two: { patch: LegacySubtractivePatch | LegacyFMPatch | LegacyAdditivePatch; level?: number; filterMix?: number };
+  combine?: VoiceArchitecture['combine'];
+  filters: [Partial<VoiceArchitecture['filters'][number]>, Partial<VoiceArchitecture['filters'][number]>?];
+  filterRouting?: number;
+  filterDecay?: number;
+}
+
+// Two-engine sounds that show each way the engines combine.
+const layeredSpecs: LayeredSpec[] = [
+  {
+    name: 'Layer Snare', category: 'Snare', tags: ['layered', 'noise', 'parallel filters'],
+    one: { patch: subtractive(190, .16, { oscillators: [silent('triangle', .7), silent('sine', .25, 0, 7)], pitchEnvelope: { amount: 12, decay: .03 } }), level: .9, filterMix: 0 },
+    two: { patch: subtractive(190, .24, { oscillators: [silent('sine'), silent('triangle')], noise: { level: .95, type: 'white' } }), level: .75, filterMix: 1 },
+    filters: [{ mode: 'lowpass', cutoff: 3200, resonance: .9, envelopeAmount: 1200 }, { mode: 'highpass', cutoff: 1400, resonance: .8, envelopeAmount: 2600 }],
+    filterDecay: .1,
+  },
+  {
+    name: 'Knock Kick', category: 'Kick', tags: ['layered', 'fm click', 'punch'], drive: .25,
+    one: { patch: subtractive(50, .5, { oscillators: [silent('sine', 1), silent('triangle', .06, 1)], pitchEnvelope: { amount: 46, decay: .07 } }), level: 1, filterMix: 0 },
+    two: { patch: fm(160, .045, 1, [1, 3.5, 7.2, 11]), level: .45, filterMix: 1 },
+    filters: [{ mode: 'lowpass', cutoff: 1100, resonance: 1, envelopeAmount: 600 }, { mode: 'highpass', cutoff: 900, resonance: .7 }],
+    filterDecay: .08,
+  },
+  {
+    name: 'Ring Clang', category: 'Metallic', tags: ['layered', 'ring mod', 'metal'], reverb: .18,
+    one: { patch: subtractive(420, .55, { oscillators: [silent('triangle', 1), silent('sine')] }), level: 1, filterMix: 0 },
+    two: { patch: subtractive(613, .5, { oscillators: [silent('square', .8), silent('sine')] }), level: .15, filterMix: 0 },
+    combine: { mode: 'ring', amount: .85 },
+    filters: [{ mode: 'highpass', cutoff: 380, resonance: 1.2 }],
+  },
+  {
+    name: 'Growl Tom', category: 'Tom', tags: ['layered', 'engine fm', 'growl'],
+    one: { patch: subtractive(118, .5, { pitchEnvelope: { amount: 20, decay: .12 } }), level: 1, filterMix: 0 },
+    two: { patch: subtractive(236, .35, { oscillators: [silent('sine', 1), silent('triangle')] }), level: .1, filterMix: 0 },
+    combine: { mode: 'fm', amount: .18 },
+    filters: [{ mode: 'lowpass', cutoff: 2600, resonance: 1.1, envelopeAmount: 1800 }],
+    filterDecay: .2,
+  },
+];
+
+function layeredPreset(spec: LayeredSpec): SynthPreset {
+  const slot = (index: number, layer: LayeredSpec['one']) => ({ ...defaultSlot(index, true), patch: sourceFromLegacy(layer.patch), level: layer.level ?? 1, filterMix: layer.filterMix ?? index });
+  return {
+    ...presetBase(spec),
+    voice: {
+      engines: [slot(0, spec.one), slot(1, spec.two)],
+      combine: spec.combine ?? { mode: 'layer', amount: .5 },
+      filters: [
+        { ...defaultFilter(true), ...spec.filters[0] },
+        spec.filters[1] ? { ...defaultFilter(true), ...spec.filters[1] } : defaultFilter(false),
+      ],
+      filterRouting: spec.filterRouting ?? 1,
+      filterEnvelope: env(.001, spec.filterDecay ?? .12, 0, .03),
+      lfos: [{ shape: 'sine', rate: 5 }, { shape: 'triangle', rate: 2 }],
+      amp: { level: 1, pan: 0, velocity: 1 },
+    },
+  };
+}
+
+export const FACTORY_PRESETS: readonly SynthPreset[] = deepFreeze([
+  ...specs.map((spec) => normalizePreset({ ...presetBase(spec), engineType: spec.patch.engine, patch: spec.patch })),
+  ...layeredSpecs.map(layeredPreset),
+]);
 
 const presetId = (name: string) => `factory-${slug(name)}`;
 const kitNames = ['Electronic', '808', '909-inspired', 'Funk', 'Hip-Hop', 'House', 'Minimal', 'Synthetic Acoustic', 'Latin Percussion', 'Experimental', 'Neutral Practice Kit'];

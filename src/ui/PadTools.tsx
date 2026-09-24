@@ -9,10 +9,6 @@ import {
   VolumeX,
   X,
 } from 'lucide-react';
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from '@/components/ui/native-select';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -23,6 +19,8 @@ import {
   serializeUserData,
 } from '../persistence/database';
 import { useApp } from '../state/AppContext';
+import { SearchMenu } from './SearchMenu';
+import { presetMenuOptions } from './SynthScreen';
 
 export function PadTools() {
   const {
@@ -91,19 +89,17 @@ export function PadTools() {
                 }
               />
             </label>
-            <label className="field-row">
+            <div className="field-row">
               <span>Sound</span>
-              <NativeSelect
+              <SearchMenu
+                ariaLabel="Pad sound"
                 value={kit.pads[selectedPadIndex].presetId}
-                onChange={(event) => assignPreset(event.target.value)}
-              >
-                {presets.map((preset) => (
-                  <NativeSelectOption key={preset.id} value={preset.id}>
-                    {preset.category} · {preset.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </label>
+                options={presetMenuOptions(presets)}
+                searchable
+                placeholder="Search sounds…"
+                onChange={assignPreset}
+              />
+            </div>
             <Parameter
               label="Volume"
               value={kit.pads[selectedPadIndex].volume}

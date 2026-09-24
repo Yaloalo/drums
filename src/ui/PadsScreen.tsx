@@ -9,9 +9,10 @@ import {
 } from '@/components/ui/native-select';
 import { useApp } from '../state/AppContext';
 import { TransportBar } from './TransportBar';
-import { Metronome } from './Metronome';
 import { PadWaveform } from './PadWaveform';
 import { audioEngine } from '../audio/AudioEngine';
+import { usePractice } from '../state/PracticeContext';
+import { PracticePanel } from './PracticePanel';
 
 export function PadsScreen() {
   const {
@@ -23,10 +24,9 @@ export function PadsScreen() {
     selectPad,
     selectedPreset,
     triggerPad,
-    activeExercise,
-    finishExercise,
-    cancelExercise,
   } = useApp();
+  const { session, onCue } = usePractice();
+  const targets = new Set(session?.exercise.parts.map((part) => part.pad));
   const [pressed, setPressed] = useState<Set<number>>(new Set());
   const padElements = useRef(new Map<string, HTMLButtonElement>());
   const pointers = useRef(new Map<number, number>());
@@ -67,6 +67,39 @@ export function PadsScreen() {
     };
   }, []);
 
+  // Guide lights: a target pad glows when its note is due.
+  useEffect(() => {
+    const timers = new Set<number>();
+    const unsubscribe = onCue((pad, delay) => {
+      const timer = window.setTimeout(() => {
+        timers.delete(timer);
+        const element =
+          document.querySelectorAll<HTMLElement>('.performance-pad')[pad];
+        if (
+          !element ||
+          window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        )
+          return;
+        const color = getComputedStyle(element).getPropertyValue('--accent');
+        element.animate(
+          [
+            {
+              boxShadow: `inset 0 0 0 3px ${color}`,
+              backgroundColor: 'var(--accent-light)',
+            },
+            { boxShadow: 'inset 0 0 0 0 transparent' },
+          ],
+          { duration: 220, easing: 'ease-out' },
+        );
+      }, delay);
+      timers.add(timer);
+    });
+    return () => {
+      unsubscribe();
+      timers.forEach(window.clearTimeout);
+    };
+  }, [onCue]);
+
   const down = (
     index: number,
     event: React.PointerEvent<HTMLButtonElement>,
@@ -79,6 +112,7 @@ export function PadsScreen() {
     triggerPad(
       index,
       event.pointerType === 'pen' ? Math.max(0.3, event.pressure) : 0.88,
+      event.timeStamp,
     );
   };
   const up = (pointerId: number) => {
@@ -94,40 +128,26 @@ export function PadsScreen() {
           <h1>Drum pads</h1>
         </div>
       </div>
-      <header className="performance-header">
-        <label className="kit-picker">
-          <span>CURRENT KIT</span>
-          <NativeSelect
-            value={kit.id}
-            onChange={(event) => loadKit(event.target.value)}
-            aria-label="Current kit"
-          >
-            {kits.map((item) => (
-              <NativeSelectOption key={item.id} value={item.id}>
-                {item.name}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </label>
-        <TransportBar compact />
-      </header>
-
-      <Metronome />
-
-      {activeExercise && (
-        <aside className="exercise-performance-strip" data-gesture-lock>
-          <div>
-            <span>TRAINING · {activeExercise.exercise.category}</span>
-            <strong>{activeExercise.exercise.title}</strong>
-          </div>
-          <div className="exercise-strip-actions">
-            <span>{activeExercise.hits.length} hits</span>
-            <button onClick={cancelExercise}>Exit</button>
-            <button className="accent" onClick={finishExercise}>
-              Score
-            </button>
-          </div>
-        </aside>
+      {session ? (
+        <PracticePanel />
+      ) : (
+        <header className="performance-header">
+          <label className="kit-picker">
+            <span>CURRENT KIT</span>
+            <NativeSelect
+              value={kit.id}
+              onChange={(event) => loadKit(event.target.value)}
+              aria-label="Current kit"
+            >
+              {kits.map((item) => (
+                <NativeSelectOption key={item.id} value={item.id}>
+                  {item.name}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </label>
+          <TransportBar compact />
+        </header>
       )}
 
       <div className="pad-field">
@@ -136,7 +156,7 @@ export function PadsScreen() {
             const preset =
               presets.find((item) => item.id === pad.presetId) ??
               selectedPreset;
-            const target = activeExercise?.exercise.targetPads.includes(index);
+            const target = targets.has(index);
             return (
               <button
                 key={`${pad.id}-${index}`}

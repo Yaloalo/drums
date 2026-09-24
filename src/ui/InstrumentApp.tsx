@@ -3,6 +3,8 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { AudioLines } from 'lucide-react';
 import { AppProvider, type Area, useApp } from '../state/AppContext';
+import { PracticeProvider, usePractice } from '../state/PracticeContext';
+import { PracticeResults } from './PracticeResults';
 import { ExercisesScreen } from './ExercisesScreen';
 import { PadsScreen } from './PadsScreen';
 import { SequencerScreen } from './SequencerScreen';
@@ -41,13 +43,17 @@ const keyboard = [
 export function InstrumentApp() {
   return (
     <AppProvider>
-      <Workspace />
+      <PracticeProvider>
+        <Workspace />
+      </PracticeProvider>
     </AppProvider>
   );
 }
 
 function Workspace() {
-  const { area, setArea, triggerPad, toggleTransport, transport } = useApp();
+  const { area, setArea, triggerPad, toggleTransport } = useApp();
+  const { session, finish } = usePractice();
+  const practising = session?.mode === 'practice';
   const pointer = useRef<{
     id: number;
     x: number;
@@ -85,28 +91,33 @@ function Workspace() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
       if (
         event.repeat ||
-        ['INPUT', 'SELECT', 'TEXTAREA'].includes(
-          (event.target as HTMLElement)?.tagName,
-        )
+        ['INPUT', 'SELECT', 'TEXTAREA'].includes(target?.tagName ?? '') ||
+        target?.closest?.('[data-keyboard-lock]')
       )
         return;
       const index = keyboard.indexOf(event.key.toLowerCase());
       if (index >= 0) {
         event.preventDefault();
-        triggerPad(index);
+        triggerPad(index, 0.9, event.timeStamp);
       }
-      if (event.code === 'Space') {
-        if ((event.target as HTMLElement)?.closest('button, [role="button"]'))
-          return;
+      if (event.key === 'Escape' && practising) {
+        event.preventDefault();
+        finish();
+      }
+      // Space would pause the backing and ruin a timed run.
+      if (event.code === 'Space' && practising) event.preventDefault();
+      else if (event.code === 'Space') {
+        if (target?.closest('button, [role="button"]')) return;
         event.preventDefault();
         toggleTransport();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [toggleTransport, triggerPad]);
+  }, [finish, practising, toggleTransport, triggerPad]);
 
   const pointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
@@ -161,10 +172,6 @@ function Workspace() {
             Pulse Foundry<small>RHYTHM INSTRUMENT</small>
           </span>
         </div>
-        <span className="workspace-status">
-          <i className={transport.playing ? 'running' : ''} />
-          {transport.playing ? 'Sequence playing' : 'Ready to play'}
-        </span>
         <ThemeToggle />
       </header>
       <div className="area-stage" ref={stage} key={area}>
@@ -174,6 +181,7 @@ function Workspace() {
         {area === 'exercises' && <ExercisesScreen />}
         {area === 'song' && <SongScreen />}
       </div>
+      <PracticeResults />
     </div>
   );
 }

@@ -1,15 +1,44 @@
 export type SynthEngineType = 'subtractive' | 'fm' | 'additive';
 export type Waveform = OscillatorType | 'noise';
-export type FilterMode = 'lowpass' | 'highpass' | 'bandpass';
+export type FilterMode = 'lowpass' | 'highpass' | 'bandpass' | 'notch';
 export type LfoShape = 'sine' | 'triangle' | 'sawtooth' | 'square';
-export type ModulationSource = 'lfo1' | 'lfo2' | 'ampEnv' | 'modEnv' | 'velocity' | 'random';
-export type ModulationDestination = 'pitch' | 'level' | 'cutoff' | 'resonance' | 'pan' | 'amplitude' | 'fmIndex' | 'spectralTilt';
+/** How Engine 2 joins Engine 1: summed, as an audio-rate pitch modulator, or as a ring modulator. */
+export type CombineMode = 'layer' | 'fm' | 'ring';
+export type ModulationSource =
+  | 'lfo1'
+  | 'lfo2'
+  | 'ampEnv'
+  | 'modEnv'
+  | 'velocity'
+  | 'random';
+export type ModulationDestination =
+  | 'pitch'
+  | 'pitch1'
+  | 'pitch2'
+  | 'level'
+  | 'amplitude'
+  | 'pan'
+  | 'engine1'
+  | 'engine2'
+  | 'combine'
+  | 'cutoff'
+  | 'resonance'
+  | 'cutoff2'
+  | 'resonance2'
+  | 'fmIndex'
+  | 'spectralTilt';
 
 export interface Envelope {
   attack: number;
   decay: number;
   sustain: number;
   release: number;
+}
+
+/** A pitch drop from `amount` semitones above the base pitch, over `decay` seconds. */
+export interface PitchSweep {
+  amount: number;
+  decay: number;
 }
 
 export interface OscillatorDefinition {
@@ -25,9 +54,6 @@ export interface OscillatorDefinition {
 export interface LFO {
   shape: LfoShape;
   rate: number;
-  depth: number;
-  sync: boolean;
-  destination: ModulationDestination;
 }
 
 export interface ModulationRoute {
@@ -50,11 +76,8 @@ export interface SubtractivePatch {
   baseFrequency: number;
   oscillators: OscillatorDefinition[];
   noise: { level: number; type: 'white' | 'pink' | 'metal' };
-  filter: { mode: FilterMode; cutoff: number; resonance: number; envelopeAmount: number; keyTracking: number };
   ampEnvelope: Envelope;
-  filterEnvelope: Envelope;
-  pitchEnvelope: { amount: number; decay: number };
-  lfos: LFO[];
+  pitchEnvelope: PitchSweep;
 }
 
 export interface FMOperator {
@@ -72,7 +95,7 @@ export interface FMPatch {
   algorithm: 1 | 2 | 3 | 4 | 5 | 6;
   operators: FMOperator[];
   ampEnvelope: Envelope;
-  lfos: LFO[];
+  pitchEnvelope: PitchSweep;
 }
 
 export interface AdditivePartial {
@@ -87,13 +110,45 @@ export interface AdditivePatch {
   baseFrequency: number;
   partials: AdditivePartial[];
   ampEnvelope: Envelope;
+  pitchEnvelope: PitchSweep;
   spectralTilt: number;
   inharmonicity: number;
   spread: number;
-  lfos: LFO[];
 }
 
+/** The sound source of one engine slot, including its own amplitude envelope. */
 export type SynthPatch = SubtractivePatch | FMPatch | AdditivePatch;
+
+export interface EngineSlot {
+  enabled: boolean;
+  patch: SynthPatch;
+  level: number;
+  /** 0 sends the engine to Filter 1 only, 1 to Filter 2 only. */
+  filterMix: number;
+  /** Edits for the other engine types, recalled when this slot switches back. */
+  drafts?: Partial<Record<SynthEngineType, SynthPatch>>;
+}
+
+export interface FilterDefinition {
+  enabled: boolean;
+  mode: FilterMode;
+  cutoff: number;
+  resonance: number;
+  envelopeAmount: number;
+  keyTracking: number;
+}
+
+/** Two engine slots feed two filters, then the amp and the effects. */
+export interface VoiceArchitecture {
+  engines: [EngineSlot, EngineSlot];
+  combine: { mode: CombineMode; amount: number };
+  filters: [FilterDefinition, FilterDefinition];
+  /** 0 = series (Filter 1 feeds Filter 2), 1 = parallel. */
+  filterRouting: number;
+  filterEnvelope: Envelope;
+  lfos: [LFO, LFO];
+  amp: { level: number; pan: number; velocity: number };
+}
 
 export interface MacroMapping {
   name: string;
@@ -108,10 +163,7 @@ export interface SynthPreset {
   category: string;
   tags: string[];
   factory: boolean;
-  engineType: SynthEngineType;
-  patch: SynthPatch;
-  /** Inactive engine drafts are retained, not layered into the active voice. */
-  engineDrafts?: Partial<Record<SynthEngineType, SynthPatch>>;
+  voice: VoiceArchitecture;
   modulation: ModulationRoute[];
   effects: EffectDefinition[];
   macros: MacroMapping[];
@@ -177,34 +229,114 @@ export interface RhythmPreset {
   pattern: Pattern;
 }
 
-export type ExerciseMode = 'perform' | 'imitate' | 'recognize' | 'reconstruct' | 'polyrhythm';
+export type ExerciseSkill =
+  | 'pulse'
+  | 'subdivision'
+  | 'accents'
+  | 'rests'
+  | 'syncopation'
+  | 'coordination'
+  | 'grooves'
+  | 'rudiments'
+  | 'fills'
+  | 'meters'
+  | 'triplets'
+  | 'polyrhythm'
+  | 'tempo'
+  | 'latin';
+
+export type ExerciseStyle =
+  | 'fundamentals'
+  | 'rock'
+  | 'funk'
+  | 'hip-hop'
+  | 'dance'
+  | 'latin'
+  | 'jazz-blues'
+  | 'world';
+
+/** One pad the player plays, on sixteenth-note steps across the exercise's bars. */
+export interface ExercisePart {
+  pad: number;
+  steps: number[];
+}
 
 export interface Exercise {
   id: string;
   title: string;
-  explanation: string;
-  category: string;
-  difficulty: number;
+  /** One line shown in the list. */
+  summary: string;
+  /** What to do, in order; shown in the detail view and during practice. */
+  instructions: string[];
+  tip?: string;
+  skill: ExerciseSkill;
+  style: ExerciseStyle;
+  difficulty: 1 | 2 | 3 | 4 | 5;
+  beatsPerBar: number;
+  beatUnit: number;
+  bars: number;
   bpm: number;
   bpmRange: [number, number];
-  meter: string;
-  bars: number;
-  kitPresetId: string;
-  rhythmPresetId: string;
-  targetPads: number[];
-  targetSteps: number[];
-  interactionMode: ExerciseMode;
-  countIn: number;
-  metronome: { enabled: boolean; gapEvery?: number; silentBars?: number };
-  toleranceMs: number;
-  hints: string[];
-  progression: { stage: number; prerequisite?: string };
+  parts: ExercisePart[];
+  /** Drum machine preset that plays along; the exercise's own pads are muted in it. */
+  backing: string | null;
+  /** Click and backing play `play` bars, then drop out for `silent` bars. */
+  gap?: { play: number; silent: number };
 }
 
 export interface ExerciseHit {
   padIndex: number;
+  /** Audio-context time at which the player heard their hit. */
   time: number;
   velocity: number;
+}
+
+export type Strictness = 'relaxed' | 'normal' | 'strict';
+export type GuideMode = 'off' | 'lights' | 'sound';
+
+/** Choices made in an exercise's setup before practising. */
+export interface PracticeOptions {
+  bpm: number;
+  /** Seconds; null practises until stopped. */
+  duration: number | null;
+  /** Rhythm preset id, or null for click only. */
+  backing: string | null;
+  click: boolean;
+  countInBars: number;
+  strictness: Strictness;
+  guide: GuideMode;
+}
+
+export interface AttemptStats {
+  expected: number;
+  perfect: number;
+  good: number;
+  ok: number;
+  early: number;
+  late: number;
+  missed: number;
+  extra: number;
+  wrongPad: number;
+  accuracy: number;
+  meanAbsMs: number;
+  spreadMs: number;
+  bestStreak: number;
+  toleranceMs: number;
+  histogram: { from: number; to: number; count: number }[];
+  bars: {
+    bar: number;
+    expected: number;
+    score: number;
+    offsetMs: number | null;
+    silent: boolean;
+  }[];
+  pads: {
+    pad: number;
+    expected: number;
+    hit: number;
+    offsetMs: number | null;
+    meanAbsMs: number | null;
+  }[];
 }
 
 export interface ExerciseAttempt {
@@ -220,13 +352,17 @@ export interface ExerciseAttempt {
   extra: number;
   wrongPad: number;
   feedback: string;
+  /** Present on attempts recorded since sessions gained timers and statistics. */
+  grade?: string;
+  bpm?: number;
+  durationSec?: number;
+  options?: PracticeOptions;
+  stats?: AttemptStats;
+  insights?: string[];
 }
 
-export interface UserProgress {
-  completed: Record<string, number>;
-  attempts: ExerciseAttempt[];
-  favorites: string[];
-}
+/** What the metronome plays on one beat of the bar. */
+export type ClickLevel = 'accent' | 'normal' | 'off';
 
 export interface TransportState {
   bpm: number;
@@ -236,9 +372,8 @@ export interface TransportState {
   swing: number;
   metronome: boolean;
   metronomeBeat?: number;
-  recording: boolean;
-  overdub: boolean;
-  quantize: boolean;
+  /** Per-beat click levels; missing beats use the default (accent on 1). */
+  clickLevels: ClickLevel[];
   countIn: number;
   currentStep: number;
 }

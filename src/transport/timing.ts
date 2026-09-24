@@ -26,14 +26,20 @@ export function nearestStep(time: number, startTime: number, bpm: number, subdiv
   return { index, offsetMs: (raw - rounded) * duration * 1000 };
 }
 
-export function createPattern(id: string, name: string, padIds: string[], bars = 1, stepsPerBar = 16): Pattern {
+/** Sixteenth-note steps in one bar of a meter, e.g. 14 for 7/8. */
+export function stepsForMeter(beatsPerBar: number, beatUnit: number): number {
+  return Math.max(1, Math.round(beatsPerBar * (16 / beatUnit)));
+}
+
+export function createPattern(id: string, name: string, padIds: string[], bars = 1, beatsPerBar = 4, beatUnit = 4): Pattern {
+  const stepsPerBar = stepsForMeter(beatsPerBar, beatUnit);
   const stepCount = bars * stepsPerBar;
   return {
     id,
     name,
     bars,
-    beatsPerBar: 4,
-    beatUnit: 4,
+    beatsPerBar,
+    beatUnit,
     subdivision: 16,
     stepsPerBar,
     factory: false,
@@ -49,6 +55,26 @@ export function resizePattern(pattern: Pattern, bars: number): Pattern {
     tracks: pattern.tracks.map((track) => ({
       ...track,
       steps: Array.from({ length }, (_, index) => track.steps[index] ? { ...track.steps[index] } : { active: false, velocity: 0.82, accent: false, probability: 1, microtiming: 0 }),
+    })),
+  };
+}
+
+/** Changes the bar length; each bar keeps its steps from the start. */
+export function setPatternMeter(pattern: Pattern, beatsPerBar: number, beatUnit: number): Pattern {
+  const stepsPerBar = stepsForMeter(beatsPerBar, beatUnit);
+  return {
+    ...pattern,
+    beatsPerBar,
+    beatUnit,
+    stepsPerBar,
+    tracks: pattern.tracks.map((track) => ({
+      ...track,
+      steps: Array.from({ length: pattern.bars * stepsPerBar }, (_, index) => {
+        const bar = Math.floor(index / stepsPerBar);
+        const step = index % stepsPerBar;
+        const previous = step < pattern.stepsPerBar ? track.steps[bar * pattern.stepsPerBar + step] : undefined;
+        return previous ? { ...previous } : { active: false, velocity: 0.82, accent: false, probability: 1, microtiming: 0 };
+      }),
     })),
   };
 }

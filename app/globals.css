@@ -1,6 +1,8 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
+@import '../src/styles/menu.css';
+@import '../src/styles/transport.css';
 @import '../src/styles/pads.css';
 @import '../src/styles/synth.css';
 @import '../src/styles/sequencer.css';
@@ -144,6 +146,12 @@ textarea {
 select {
   max-width: 100%;
 }
+fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
 :is(button, a, input, select, textarea, [tabindex]):focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 3px;
@@ -270,24 +278,8 @@ input[type='number'],
   letter-spacing: 3.2px;
   font-weight: 650;
 }
-.workspace-status {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-left: auto;
-  color: var(--muted);
-  font-size: 11px;
-}
-.workspace-status i {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--muted);
-}
-.workspace-status i.running {
-  background: var(--green);
-}
 .theme-toggle {
+  margin-left: auto;
   color: var(--ink);
 }
 .area-stage {
@@ -323,148 +315,6 @@ input[type='number'],
 }
 .back-control.right {
   order: 3;
-}
-.transport-bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.tempo-control input::-webkit-inner-spin-button,
-.tempo-control input::-webkit-outer-spin-button {
-  appearance: none;
-  margin: 0;
-}
-.metronome-control {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-.metronome-control button {
-  gap: 8px;
-  color: var(--muted);
-  background: transparent;
-}
-.metronome-control button.enabled {
-  color: var(--accent);
-  background: var(--accent-light);
-  border-color: var(--accent-border);
-}
-.metronome-control small {
-  font-size: 9px;
-  letter-spacing: 0.6px;
-}
-.metronome-led {
-  width: 6px;
-  height: 6px;
-  background: var(--muted);
-  border-radius: 50%;
-}
-.enabled .metronome-led {
-  background: var(--accent);
-}
-.metronome-beats {
-  display: flex;
-  gap: 5px;
-}
-.metronome-beats i {
-  font-style: normal;
-  display: grid;
-  place-items: center;
-  width: 19px;
-  height: 22px;
-  border-bottom: 2px solid var(--line);
-  color: var(--muted);
-  font-size: 10px;
-}
-.metronome-beats i.lit {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-light);
-}
-.metronome-beats i:first-child.lit {
-  border-color: var(--chord);
-  color: var(--chord);
-  background: var(--chord-light);
-}
-.metronome-meter {
-  color: var(--muted);
-  font-size: 10px;
-  margin-left: auto;
-}
-.sequence-practice-tools {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
-}
-.recording-enabled {
-  color: var(--chord);
-  border-color: var(--chord);
-  background: var(--chord-light);
-}
-@media (max-width: 370px) {
-  .metronome-control {
-    gap: 6px;
-    flex-wrap: wrap;
-  }
-  .metronome-beats {
-    gap: 3px;
-  }
-  .metronome-beats i {
-    width: 16px;
-  }
-}
-.transport-bar button {
-  width: auto;
-  min-height: 40px;
-  padding: 8px;
-}
-.transport-bar .transport-play {
-  background: var(--accent);
-  color: var(--tool-active-ink);
-  border-color: var(--accent);
-}
-.transport-play.is-playing {
-  box-shadow: inset 0 0 0 2px var(--tool-active-ink);
-}
-.transport-icon {
-  color: var(--muted);
-}
-.transport-icon.is-active {
-  background: var(--accent-light);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.transport-icon.record.is-active {
-  color: var(--chord);
-  background: var(--chord-light);
-  border-color: var(--chord);
-}
-.transport-icon.record.is-active svg {
-  fill: currentColor;
-}
-.tempo-control {
-  display: flex;
-  gap: 5px;
-  align-items: center;
-  padding: 0 6px;
-}
-.tempo-control input {
-  appearance: textfield;
-  width: 56px;
-  padding: 6px;
-  font-size: 17px;
-  font-weight: 650;
-  text-align: center;
-}
-.tempo-control input::-webkit-inner-spin-button {
-  display: none;
-}
-.tempo-control span {
-  color: var(--muted);
-  font-size: 9px;
 }
 [data-slot='native-select-wrapper'] {
   min-width: 0;
@@ -649,8 +499,7 @@ input[type='number'],
   button,
   input,
   select,
-  [data-slot='native-select'],
-  .transport-bar button {
+  [data-slot='native-select'] {
     min-height: 44px;
   }
   .icon-button {
@@ -682,9 +531,6 @@ input[type='number'],
   .brand > svg {
     width: 25px;
   }
-  .workspace-status {
-    font-size: 10px;
-  }
   :where(.screen) {
     padding: 22px 16px max(16px, env(safe-area-inset-bottom));
   }
@@ -701,20 +547,6 @@ input[type='number'],
   }
   .back-control {
     padding: 8px;
-  }
-  .tempo-control {
-    gap: 4px;
-    padding: 0 3px;
-  }
-}
-@media (max-width: 400px) {
-  .workspace-status {
-    font-size: 0;
-    gap: 0;
-  }
-  .workspace-status i {
-    width: 6px;
-    height: 6px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

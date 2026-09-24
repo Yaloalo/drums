@@ -2,7 +2,15 @@
 
 import { memo, useEffect, useState } from 'react';
 import { AudioEngine } from '../audio/AudioEngine';
-import { waveformPath, type WaveformPreview } from '../audio/waveform';
+import {
+  findOnset,
+  scopeTrace,
+  scopeWindow,
+  waveformPath,
+  type ScopeZoom,
+  type WaveformPreview,
+} from '../audio/waveform';
+import { normalizePreset } from '../model/voice';
 import type { SynthPreset } from '../model/types';
 
 const cache = new Map<string, Promise<WaveformPreview>>();
@@ -23,7 +31,24 @@ function getPreview(key: string): Promise<WaveformPreview> {
       { length: buffer.numberOfChannels },
       (_, index) => buffer.getChannelData(index),
     );
-    return { path: waveformPath(channels), duration: buffer.duration };
+    const { engines } = normalizePreset(preset).voice;
+    const lead = engines.find((slot) => slot.enabled) ?? engines[0];
+    const fundamental = lead.patch.baseFrequency * 2 ** (tune / 12);
+    const zooms: ScopeZoom[] = ['auto', 'short', 'medium', 'full'];
+    const onset = findOnset(channels, buffer.sampleRate);
+    const traces = Object.fromEntries(
+      zooms.map((zoom) => {
+        const window = scopeWindow(zoom, buffer.duration - onset, fundamental);
+        return [
+          zoom,
+          {
+            window,
+            path: scopeTrace(channels, buffer.sampleRate, window, 480, onset),
+          },
+        ];
+      }),
+    ) as WaveformPreview['traces'];
+    return { path: waveformPath(channels), duration: buffer.duration, traces };
   });
   queue = next.catch(() => undefined);
   cache.set(key, next);

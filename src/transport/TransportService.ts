@@ -1,7 +1,7 @@
 import { audioEngine } from '../audio/AudioEngine';
 import type { Pattern, TransportState } from '../model/types';
 import { secondsPerStep, shouldPlayStep, swingOffset } from './timing';
-import { MetronomeClock } from './MetronomeClock';
+import { clickLevelsFor, MetronomeClock } from './MetronomeClock';
 
 type StateListener = (state: TransportState) => void;
 type StepTrigger = (padId: string, velocity: number, time: number) => void;
@@ -14,9 +14,7 @@ export class TransportService {
     loop: true,
     swing: 0.06,
     metronome: false,
-    recording: false,
-    overdub: true,
-    quantize: true,
+    clickLevels: [],
     countIn: 0,
     currentStep: 0,
   };
@@ -32,6 +30,11 @@ export class TransportService {
   private clickVisuals = new Set<number>();
   private playGeneration = 0;
   private clickGeneration = 0;
+  /** Audio time of step 0 of the current run, after any count-in. */
+  private runStart = 0;
+  private absoluteStep = 0;
+  /** Returns false for bars in which pattern and click stay silent. */
+  private gate: ((bar: number) => boolean) | null = null;
 
   constructor(patternGetter: () => Pattern, trigger: StepTrigger) {
     this.patternGetter = patternGetter;
@@ -47,6 +50,13 @@ export class TransportService {
   }
   get snapshot() {
     return this.state;
+  }
+  get runStartTime() {
+    return this.runStart;
+  }
+
+  setGate(gate: ((bar: number) => boolean) | null) {
+    this.gate = gate;
   }
 
   update(patch: Partial<TransportState>) {
@@ -80,15 +90,27 @@ export class TransportService {
     this.emit();
   }
 
-  async play() {
+  /** Starts or resumes; a fresh start can be preceded by bars of count-in clicks. */
+  async play(options: { countInBars?: number } = {}) {
     const generation = ++this.playGeneration;
     await audioEngine.initialize();
     if (generation !== this.playGeneration) return;
     if (this.state.playing && !this.state.paused) return;
-    const contextTime = audioEngine.currentTime;
-    this.nextStep = this.state.paused ? this.state.currentStep : 0;
-    this.nextStepTime = contextTime + 0.055;
+    const resuming = this.state.paused;
+    const pattern = this.patternGetter();
+    const stepDuration = secondsPerStep(this.state.bpm, pattern.subdivision);
+    const beat = stepDuration * (pattern.subdivision / pattern.beatUnit);
+    const countIn = resuming ? 0 : Math.max(0, options.countInBars ?? 0);
+    const lead = audioEngine.currentTime + 0.055;
     this.clearClicks();
+    for (let index = 0; index < countIn * pattern.beatsPerBar; index++)
+      audioEngine.click(lead + index * beat, index % pattern.beatsPerBar === 0);
+    this.nextStep = resuming ? this.state.currentStep : 0;
+    this.nextStepTime = lead + countIn * pattern.stepsPerBar * stepDuration;
+    if (!resuming) {
+      this.absoluteStep = 0;
+      this.runStart = this.nextStepTime;
+    }
     this.update({ playing: true, paused: false });
     this.syncClickClock();
     this.startTimer();
@@ -107,8 +129,16 @@ export class TransportService {
       playing: false,
       paused: false,
       currentStep: 0,
-      recording: false,
     });
+  }
+
+  /** Re-derives the click phase after the pattern's meter or length changed. */
+  realign() {
+    const pattern = this.patternGetter();
+    this.nextStep %= Math.max(1, pattern.bars * pattern.stepsPerBar);
+    if (!this.state.metronome) return;
+    this.clearClicks();
+    this.syncClickClock();
   }
 
   toggle() {
@@ -157,6 +187,10 @@ export class TransportService {
     const pattern = this.patternGetter();
     if (this.state.metronome) {
       const now = audioEngine.currentTime;
+      const levels = clickLevelsFor(
+        this.state.clickLevels,
+        pattern.beatsPerBar,
+      );
       for (const click of this.clickClock.window(
         now,
         now + this.lookAheadSeconds,
@@ -164,7 +198,16 @@ export class TransportService {
         pattern.beatsPerBar,
         pattern.beatUnit,
       )) {
-        audioEngine.click(click.time, click.accent);
+        const level = levels[click.beat] ?? 'normal';
+        const bar = this.state.playing
+          ? Math.floor(
+              (click.time - this.runStart + 0.001) /
+                (secondsPerStep(this.state.bpm, pattern.subdivision) *
+                  pattern.stepsPerBar),
+            )
+          : -1;
+        if (level !== 'off' && (!this.gate || this.gate(bar)))
+          audioEngine.click(click.time, level === 'accent');
         const timer = window.setTimeout(
           () => {
             this.clickVisuals.delete(timer);
@@ -179,14 +222,17 @@ export class TransportService {
     if (!this.state.playing) return;
     const length = Math.max(1, pattern.bars * pattern.stepsPerBar);
     const duration = secondsPerStep(this.state.bpm, pattern.subdivision);
+    if (this.nextStep >= length) this.nextStep = 0;
     while (
       this.nextStepTime <
       audioEngine.currentTime + this.lookAheadSeconds
     ) {
       const scheduledTime = this.nextStepTime;
+      const audible =
+        !this.gate || this.gate(Math.floor(this.absoluteStep / pattern.stepsPerBar));
       pattern.tracks.forEach((track) => {
         const step = track.steps[this.nextStep];
-        if (!track.muted && step && shouldPlayStep(step))
+        if (audible && !track.muted && step && shouldPlayStep(step))
           this.trigger(
             track.padId,
             step.accent ? 1 : step.velocity,
@@ -195,6 +241,7 @@ export class TransportService {
       });
       this.update({ currentStep: this.nextStep });
       this.nextStep += 1;
+      this.absoluteStep += 1;
       this.nextStepTime +=
         duration *
         (this.nextStep % 2 === 1 ? 1 + this.state.swing : 1 - this.state.swing);

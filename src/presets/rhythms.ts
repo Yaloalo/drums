@@ -36,14 +36,16 @@ const specs: RhythmSpec[] = [
   { id: 'breakbeat', title: 'Broken break', bpm: 112, difficulty: 4, tags: ['groove', 'breakbeat'], explanation: 'Kicks and snares trade syncopated positions.', rows: { 0: [0, 3, 7, 10, 14], 1: [4, 9, 12, 15], 2: [0, 2, 4, 6, 8, 10, 12, 14] } },
   { id: 'three-four', title: 'Waltz frame', meter: '3/4', bpm: 92, difficulty: 2, tags: ['meter', '3/4'], explanation: 'Three quarter-note groups per bar.', rows: { 0: [0], 1: [4, 8], 2: [0, 2, 4, 6, 8, 10] } },
   { id: 'six-eight', title: 'Rolling 6/8', meter: '6/8', bpm: 92, difficulty: 3, tags: ['meter', '6/8'], explanation: 'Two large beats, each split into three.', rows: { 0: [0, 6], 1: [3, 9], 2: [0, 2, 4, 6, 8, 10] } },
-  { id: 'twelve-eight', title: 'Slow 12/8', meter: '12/8', bpm: 76, difficulty: 3, tags: ['meter', '12/8'], explanation: 'Four beats with triplet subdivisions.', rows: { 0: [0, 6], 1: [3, 9], 2: [0, 2, 4, 6, 8, 10] } },
-  { id: 'five-four', title: 'Five-count orbit', meter: '5/4', bpm: 96, difficulty: 4, tags: ['meter', '5/4', '3+2'], explanation: 'Hear the bar as 3 + 2.', rows: { 0: [0, 6], 1: [3, 8], 2: [0, 2, 4, 6, 8] } },
+  { id: 'twelve-eight', title: 'Slow 12/8', meter: '12/8', bpm: 76, difficulty: 3, tags: ['meter', '12/8'], explanation: 'Four beats with triplet subdivisions.', rows: { 0: [0, 12], 1: [6, 18], 2: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22] } },
+  { id: 'five-four', title: 'Five-count orbit', meter: '5/4', bpm: 96, difficulty: 4, tags: ['meter', '5/4', '3+2'], explanation: 'Hear the bar as 3 + 2.', rows: { 0: [0, 12], 1: [6, 16], 2: [0, 4, 8, 12, 16] } },
   { id: 'seven-eight-223', title: 'Seven — 2+2+3', meter: '7/8', bpm: 106, difficulty: 4, tags: ['meter', '7/8', '2+2+3'], explanation: 'Seven eighth notes grouped 2 + 2 + 3.', rows: { 0: [0, 4, 8], 1: [2, 6, 11], 2: [0, 2, 4, 6, 8, 10, 12] } },
   { id: 'seven-eight-322', title: 'Seven — 3+2+2', meter: '7/8', bpm: 104, difficulty: 4, tags: ['meter', '7/8', '3+2+2'], explanation: 'Seven eighth notes grouped 3 + 2 + 2.', rows: { 0: [0, 6, 10], 1: [4, 8, 12], 2: [0, 2, 4, 6, 8, 10, 12] } },
-  { id: 'clave-32', title: '3–2 son clave', bpm: 96, difficulty: 4, kit: 'kit-latin-percussion', tags: ['latin', 'afro-cuban', 'clave'], explanation: 'The two-bar 3–2 son clave timeline.', bars: 2, rows: { 13: [0, 3, 6, 12, 18], 0: [0, 8, 16, 24], 10: [2, 6, 10, 14, 18, 22, 26, 30] } },
-  { id: 'clave-23', title: '2–3 son clave', bpm: 96, difficulty: 4, kit: 'kit-latin-percussion', tags: ['latin', 'afro-cuban', 'clave'], explanation: 'The two-bar 2–3 son clave timeline.', bars: 2, rows: { 13: [0, 6, 12, 19, 22], 0: [0, 8, 16, 24], 10: [2, 6, 10, 14, 18, 22, 26, 30] } },
+  { id: 'clave-32', title: '3–2 son clave', bpm: 96, difficulty: 4, kit: 'kit-latin-percussion', tags: ['latin', 'afro-cuban', 'clave'], explanation: 'The two-bar 3–2 son clave timeline.', bars: 2, rows: { 13: [0, 6, 12, 20, 24], 0: [0, 8, 16, 24], 10: [2, 6, 10, 14, 18, 22, 26, 30] } },
+  { id: 'clave-23', title: '2–3 son clave', bpm: 96, difficulty: 4, kit: 'kit-latin-percussion', tags: ['latin', 'afro-cuban', 'clave'], explanation: 'The two-bar 2–3 son clave timeline.', bars: 2, rows: { 13: [4, 8, 16, 22, 28], 0: [0, 8, 16, 24], 10: [2, 6, 10, 14, 18, 22, 26, 30] } },
   { id: 'bossa-frame', title: 'Bossa frame', bpm: 116, difficulty: 4, kit: 'kit-latin-percussion', tags: ['latin', 'bossa'], explanation: 'A light syncopated clave-like frame.', rows: { 13: [0, 3, 7, 10, 13], 0: [0, 6, 8, 14], 10: [0, 2, 4, 6, 8, 10, 12, 14] } },
   { id: 'three-two-polyrhythm', title: '3:2 lattice', bpm: 72, difficulty: 5, tags: ['polyrhythm', '3:2'], explanation: 'Three evenly spaced notes against two.', rows: { 9: [0, 5, 10], 13: [0, 8] } },
+  { id: 'three-two-waltz', title: '3:2 in three', meter: '3/4', bpm: 70, difficulty: 4, tags: ['polyrhythm', '3:2'], explanation: 'Three quarter notes on the mallet against two dotted quarters on the clave.', rows: { 9: [0, 4, 8], 13: [0, 6] } },
+  { id: 'four-three-waltz', title: '4:3 in three', meter: '3/4', bpm: 60, difficulty: 5, tags: ['polyrhythm', '4:3'], explanation: 'Four dotted eighths on the mallet against three quarter notes on the clave.', rows: { 9: [0, 3, 6, 9], 13: [0, 4, 8] } },
   { id: 'gap-click', title: 'Gap click', bpm: 84, difficulty: 4, tags: ['pulse', 'gap-click'], explanation: 'Reference clicks leave space for internal time.', rows: { 9: [0, 8] } },
   { id: 'syncopation-study', title: 'Sixteenth syncopation', bpm: 88, difficulty: 4, tags: ['syncopation', 'rests'], explanation: 'A phrase that avoids several downbeats.', rows: { 1: [3, 6, 10, 15], 0: [0, 7, 11], 2: [0, 2, 4, 6, 8, 10, 12, 14] } },
 ];
@@ -54,11 +56,8 @@ function meterNumbers(meter = '4/4') {
 }
 
 export function patternFromRows(spec: RhythmSpec): Pattern {
-  const bars = spec.bars ?? 1;
-  const pattern = createPattern(`pattern-${spec.id}`, spec.title, padIds, bars);
   const { beatsPerBar, beatUnit } = meterNumbers(spec.meter);
-  pattern.beatsPerBar = beatsPerBar;
-  pattern.beatUnit = beatUnit;
+  const pattern = createPattern(`pattern-${spec.id}`, spec.title, padIds, spec.bars ?? 1, beatsPerBar, beatUnit);
   Object.entries(spec.rows).forEach(([row, hits]) => hits.forEach((step) => {
     if (pattern.tracks[Number(row)]?.steps[step]) pattern.tracks[Number(row)].steps[step].active = true;
   }));

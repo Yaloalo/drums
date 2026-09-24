@@ -1,9 +1,18 @@
 import { FM_ALGORITHMS } from './synthTopology';
+import {
+  envelopeLength,
+  normalizePreset,
+  voiceLength,
+} from '../model/voice';
 import type {
   AdditivePatch,
   Envelope,
+  FilterDefinition,
   FMPatch,
+  ModulationDestination,
+  PitchSweep,
   SubtractivePatch,
+  SynthPatch,
   SynthPreset,
 } from '../model/types';
 
@@ -24,6 +33,29 @@ interface VoiceNodes {
   pan: AudioParam;
 }
 
+/** A modulation target and how far one unit of modulation moves it. */
+interface Target {
+  param: AudioParam;
+  scale: number;
+}
+
+/** One engine slot, rendered up to its own amplitude envelope. */
+interface EngineVoice {
+  output: GainNode;
+  detune: AudioParam[];
+  /** Oscillator frequencies another engine may frequency-modulate. */
+  frequencies: { param: AudioParam; frequency: number }[];
+  fmIndex: Target[];
+  tilt: Target[];
+}
+
+interface FilterStage {
+  input: GainNode;
+  output: AudioNode;
+  frequency: AudioParam | null;
+  q: AudioParam | null;
+}
+
 export class AudioEngine {
   private hitListeners = new Set<
     (hit: { padId: string; delay: number; duration: number }) => void
@@ -41,8 +73,31 @@ export class AudioEngine {
   private maxVoices = 48;
   private clicks = new Set<OscillatorNode>();
 
+  /** Scheduled sounds reach the speakers this much later: the master
+   * compressor's look-ahead (measured at 6 ms in Chromium). */
+  static readonly graphDelay = 0.006;
+
   get currentTime(): number {
     return this.context?.currentTime ?? 0;
+  }
+
+  /**
+   * The context time the listener was hearing at a DOM event timestamp.
+   * Output latency is taken from the device's own output timestamp, so a hit
+   * played in time with what is heard compares fairly with scheduled notes.
+   */
+  audibleTime(eventTime = performance.now()): number {
+    const context = this.context;
+    if (!(context instanceof AudioContext)) return this.currentTime;
+    const stamp = context.getOutputTimestamp?.();
+    if (stamp?.performanceTime && stamp.contextTime !== undefined)
+      return stamp.contextTime + (eventTime - stamp.performanceTime) / 1000;
+    return (
+      context.currentTime -
+      (context.outputLatency || 0) -
+      (context.baseLatency || 0) -
+      (performance.now() - eventTime) / 1000
+    );
   }
   get ready(): boolean {
     return this.context?.state === 'running';
@@ -99,19 +154,17 @@ export class AudioEngine {
   // Render through the same voices, filters and effects as live hits, without
   // touching the live AudioContext or requiring an audible user gesture.
   static async renderPreview(
-    preset: SynthPreset,
+    input: SynthPreset,
     tune = 0,
   ): Promise<AudioBuffer> {
+    const preset = normalizePreset(input);
     const engine = new AudioEngine();
     const tail = preset.effects.some(
       (effect) => effect.enabled && ['delay', 'reverb'].includes(effect.type),
     )
       ? 1.8
       : 0.06;
-    const duration = Math.min(
-      8,
-      engine.envelopeLength(preset.patch.ampEnvelope) + 0.08 + tail,
-    );
+    const duration = Math.min(8, voiceLength(preset.voice) + 0.08 + tail);
     const context = new OfflineAudioContext(
       2,
       Math.ceil(duration * 44100),
@@ -132,24 +185,21 @@ export class AudioEngine {
     );
   }
 
-  trigger(preset: SynthPreset, options: TriggerOptions = {}) {
+  trigger(input: SynthPreset, options: TriggerOptions = {}) {
     if (!this.context || !this.master) return;
+    const preset = normalizePreset(input);
     const time = Math.max(
       this.context.currentTime,
       options.time ?? this.context.currentTime,
     );
     const velocity = Math.max(0.02, Math.min(1, options.velocity ?? 0.85));
     if (this.activeVoices.size >= this.maxVoices) this.releaseOldest();
-    if (preset.patch.engine === 'subtractive')
-      this.triggerSubtractive(preset.patch, preset, time, velocity, options);
-    else if (preset.patch.engine === 'fm')
-      this.triggerFM(preset.patch, preset, time, velocity, options);
-    else this.triggerAdditive(preset.patch, preset, time, velocity, options);
+    this.playVoice(preset, time, velocity, options);
     if (options.padId) {
       const hit = {
         padId: options.padId,
         delay: Math.max(0, time - this.context.currentTime) * 1000,
-        duration: this.envelopeLength(preset.patch.ampEnvelope) * 1000,
+        duration: voiceLength(preset.voice) * 1000,
       };
       this.hitListeners.forEach((listener) => listener(hit));
     }
@@ -180,61 +230,210 @@ export class AudioEngine {
     this.clicks.clear();
   }
 
-  private triggerSubtractive(
-    patch: SubtractivePatch,
+  /*
+   * Engine 1 ─┬─ level ─┬─(1 − mix)─▶ Filter 1 ─┬─(1 − routing)─▶ Filter 2 ─┐
+   *           │         └─(mix)──────────────────┼───────────────▶ Filter 2 ─┼─▶ Amp ─▶ FX ─▶ out
+   * Engine 2 ─┘ (layer, FM or ring into Engine 1) └─(routing)───────────────────┘
+   */
+  private playVoice(
     preset: SynthPreset,
     time: number,
     velocity: number,
     options: TriggerOptions,
   ) {
     const context = this.context!;
-    const output = context.createGain();
+    const { voice } = preset;
+    const amp = context.createGain();
+    const sensitivity = Math.max(0, Math.min(1, voice.amp.velocity));
+    amp.gain.setValueAtTime(
+      Math.max(
+        0.0001,
+        voice.amp.level *
+          (options.volume ?? 1) *
+          (1 - sensitivity + sensitivity * velocity),
+      ),
+      time,
+    );
+    const chain = this.connectVoice(
+      amp,
+      preset,
+      Math.max(-1, Math.min(1, (options.pan ?? 0) + voice.amp.pan)),
+      time,
+      voiceLength(voice),
+    );
+    const gain = (value: number) => {
+      const node = context.createGain();
+      node.gain.value = value;
+      chain.nodes.push(node);
+      return node;
+    };
+    const tune = options.tune ?? 0;
+    const [filterOne, filterTwo] = voice.filters.map((definition) =>
+      this.filterStage(definition, voice.filterEnvelope, time, tune, chain),
+    );
+    const routing = Math.max(0, Math.min(1, voice.filterRouting));
+    filterOne.output.connect(gain(1 - routing)).connect(filterTwo.input);
+    filterOne.output.connect(gain(routing)).connect(amp);
+    filterTwo.output.connect(amp);
+
+    const engines = voice.engines.map((slot) =>
+      slot.enabled
+        ? this.buildEngine(slot.patch, time, 2 ** (tune / 12), chain)
+        : null,
+    );
+    const levels = voice.engines.map((slot, index) => {
+      if (!engines[index]) return null;
+      const level = gain(slot.level);
+      const mix = Math.max(0, Math.min(1, slot.filterMix));
+      level.connect(gain(1 - mix)).connect(filterOne.input);
+      level.connect(gain(mix)).connect(filterTwo.input);
+      return level;
+    });
+
+    const [one, two] = engines;
+    const combine: Target[] = [];
+    const amount = Math.max(0, Math.min(1, voice.combine.amount));
+    if (one && two && voice.combine.mode === 'fm') {
+      // Engine 2 bends Engine 1's oscillators at audio rate; depth scales with
+      // each oscillator's own frequency so the modulation index is consistent.
+      for (const { param, frequency } of one.frequencies) {
+        const depth = gain(amount * 2 * frequency);
+        two.output.connect(depth).connect(param);
+        combine.push({ param: depth.gain, scale: 2 * frequency });
+      }
+      one.output.connect(levels[0]!);
+    } else if (one && two && voice.combine.mode === 'ring') {
+      const ring = gain(0);
+      const wet = gain(amount);
+      one.output.connect(gain(1 - amount)).connect(levels[0]!);
+      one.output.connect(ring).connect(wet).connect(levels[0]!);
+      two.output.connect(ring.gain);
+      combine.push({ param: wet.gain, scale: 1 });
+    } else if (one) one.output.connect(levels[0]!);
+    if (two) two.output.connect(levels[1]!);
+
+    const cents = (engine: EngineVoice | null) =>
+      (engine?.detune ?? []).map((param) => ({ param, scale: 1200 }));
+    const level = (node: GainNode | null) =>
+      node ? [{ param: node.gain, scale: 1 }] : [];
+    const param = (value: AudioParam | null, scale: number) =>
+      value ? [{ param: value, scale }] : [];
+    this.attachModulation(
+      preset,
+      chain,
+      {
+        pitch: [...cents(one), ...cents(two)],
+        pitch1: cents(one),
+        pitch2: cents(two),
+        engine1: level(levels[0]),
+        engine2: level(levels[1]),
+        combine,
+        cutoff: param(filterOne.frequency, 5000),
+        resonance: param(filterOne.q, 8),
+        cutoff2: param(filterTwo.frequency, 5000),
+        resonance2: param(filterTwo.q, 8),
+        fmIndex: [...(one?.fmIndex ?? []), ...(two?.fmIndex ?? [])],
+        spectralTilt: [...(one?.tilt ?? []), ...(two?.tilt ?? [])],
+      },
+      time,
+      velocity,
+    );
+    this.trackVoice(chain);
+  }
+
+  private filterStage(
+    definition: FilterDefinition,
+    envelope: Envelope,
+    time: number,
+    tune: number,
+    chain: VoiceNodes,
+  ): FilterStage {
+    const context = this.context!;
+    const input = context.createGain();
+    chain.nodes.push(input);
+    if (!definition.enabled)
+      return { input, output: input, frequency: null, q: null };
     const filter = context.createBiquadFilter();
-    filter.type = patch.filter.mode;
-    filter.Q.setValueAtTime(patch.filter.resonance, time);
+    filter.type = definition.mode;
+    filter.Q.setValueAtTime(definition.resonance, time);
     const cutoff = Math.max(
       40,
       Math.min(
         19000,
-        patch.filter.cutoff *
-          2 ** (((options.tune ?? 0) / 12) * patch.filter.keyTracking),
+        definition.cutoff * 2 ** ((tune / 12) * definition.keyTracking),
       ),
     );
-    const filterLevel = (level: number) =>
-      Math.max(
-        40,
-        Math.min(19000, cutoff + patch.filter.envelopeAmount * level),
-      );
-    const env = patch.filterEnvelope;
+    const level = (value: number) =>
+      Math.max(40, Math.min(19000, cutoff + definition.envelopeAmount * value));
     filter.frequency.setValueAtTime(cutoff, time);
-    filter.frequency.exponentialRampToValueAtTime(
-      filterLevel(1),
-      time + Math.max(0.001, env.attack),
-    );
-    filter.frequency.exponentialRampToValueAtTime(
-      filterLevel(env.sustain),
-      time + Math.max(0.001, env.attack) + Math.max(0.005, env.decay),
-    );
-    filter.frequency.exponentialRampToValueAtTime(
-      cutoff,
-      time + this.envelopeLength(env),
-    );
-    this.scheduleEnvelope(
-      output.gain,
-      patch.ampEnvelope,
-      time,
-      velocity * (options.volume ?? 1),
-    );
-    const voice = this.connectVoice(
-      filter,
-      output,
-      preset,
-      options.pan ?? 0,
-      time,
-      this.envelopeLength(patch.ampEnvelope),
-    );
-    const tuneRatio = 2 ** ((options.tune ?? 0) / 12);
+    if (definition.envelopeAmount !== 0) {
+      filter.frequency.exponentialRampToValueAtTime(
+        level(1),
+        time + Math.max(0.001, envelope.attack),
+      );
+      filter.frequency.exponentialRampToValueAtTime(
+        level(envelope.sustain),
+        time + Math.max(0.001, envelope.attack) + Math.max(0.005, envelope.decay),
+      );
+      filter.frequency.exponentialRampToValueAtTime(
+        cutoff,
+        time + envelopeLength(envelope),
+      );
+    }
+    input.connect(filter);
+    chain.nodes.push(filter);
+    return { input, output: filter, frequency: filter.frequency, q: filter.Q };
+  }
 
+  private buildEngine(
+    patch: SynthPatch,
+    time: number,
+    tuneRatio: number,
+    chain: VoiceNodes,
+  ): EngineVoice {
+    const output = this.context!.createGain();
+    this.scheduleEnvelope(output.gain, patch.ampEnvelope, time, 1);
+    chain.nodes.push(output);
+    if (patch.engine === 'fm')
+      return this.buildFM(patch, output, time, tuneRatio, chain);
+    if (patch.engine === 'additive')
+      return this.buildAdditive(patch, output, time, tuneRatio, chain);
+    return this.buildAnalog(patch, output, time, tuneRatio, chain);
+  }
+
+  private sweep(
+    param: AudioParam,
+    frequency: number,
+    sweep: PitchSweep | undefined,
+    time: number,
+  ) {
+    const base = Math.max(20, frequency);
+    if (!sweep?.amount) {
+      param.setValueAtTime(base, time);
+      return;
+    }
+    param.setValueAtTime(Math.max(20, base * 2 ** (sweep.amount / 12)), time);
+    param.exponentialRampToValueAtTime(
+      base,
+      time + Math.max(0.008, sweep.decay),
+    );
+  }
+
+  private buildAnalog(
+    patch: SubtractivePatch,
+    output: GainNode,
+    time: number,
+    tuneRatio: number,
+    chain: VoiceNodes,
+  ): EngineVoice {
+    const context = this.context!;
+    const engine: EngineVoice = {
+      output,
+      detune: [],
+      frequencies: [],
+      fmIndex: [],
+      tilt: [],
+    };
     patch.oscillators.forEach((definition) => {
       if (definition.level <= 0) return;
       const oscillator = context.createOscillator();
@@ -243,87 +442,52 @@ export class AudioEngine {
       const semitones =
         definition.octave * 12 + definition.semitone + definition.fine / 100;
       const base = patch.baseFrequency * tuneRatio * 2 ** (semitones / 12);
-      const pitchStart = base * 2 ** (patch.pitchEnvelope.amount / 12);
-      oscillator.frequency.setValueAtTime(Math.max(20, pitchStart), time);
-      oscillator.frequency.exponentialRampToValueAtTime(
-        Math.max(20, base),
-        time + Math.max(0.008, patch.pitchEnvelope.decay),
-      );
+      this.sweep(oscillator.frequency, base, patch.pitchEnvelope, time);
       gain.gain.value = definition.level;
-      oscillator.connect(gain).connect(filter);
+      oscillator.connect(gain).connect(output);
       oscillator.start(time);
-      oscillator.stop(voice.stopAt);
-      voice.sources.push(oscillator);
-      voice.nodes.push(gain);
+      oscillator.stop(chain.stopAt);
+      chain.sources.push(oscillator);
+      chain.nodes.push(gain);
+      engine.detune.push(oscillator.detune);
+      engine.frequencies.push({ param: oscillator.frequency, frequency: base });
     });
-
     if (patch.noise.level > 0) {
       const noise = context.createBufferSource();
       const gain = context.createGain();
       noise.buffer = this.getNoiseBuffer(patch.noise.type);
       gain.gain.value = patch.noise.level;
-      noise.connect(gain).connect(filter);
+      noise.connect(gain).connect(output);
       noise.start(time);
-      noise.stop(voice.stopAt);
-      voice.sources.push(noise);
-      voice.nodes.push(gain);
+      noise.stop(chain.stopAt);
+      chain.sources.push(noise);
+      chain.nodes.push(gain);
     }
-    this.attachModulation(
-      preset,
-      voice,
-      {
-        pitch: voice.sources
-          .filter(
-            (source): source is OscillatorNode =>
-              source instanceof OscillatorNode,
-          )
-          .map((oscillator) => oscillator.detune),
-        cutoff: [filter.frequency],
-        resonance: [filter.Q],
-        amplitude: [output.gain],
-      },
-      time,
-      velocity,
-    );
-    this.trackVoice(voice);
+    return engine;
   }
 
-  private triggerFM(
+  private buildFM(
     patch: FMPatch,
-    preset: SynthPreset,
+    output: GainNode,
     time: number,
-    velocity: number,
-    options: TriggerOptions,
-  ) {
+    tuneRatio: number,
+    chain: VoiceNodes,
+  ): EngineVoice {
     const context = this.context!;
-    const output = context.createGain();
-    this.scheduleEnvelope(
-      output.gain,
-      patch.ampEnvelope,
-      time,
-      velocity * (options.volume ?? 1),
+    const topology = FM_ALGORITHMS[patch.algorithm];
+    const frequencies = patch.operators.map(
+      (operator) =>
+        patch.baseFrequency *
+        tuneRatio *
+        operator.ratio *
+        2 ** ((operator.coarse * 12 + operator.fine / 100) / 12),
     );
-    const voice = this.connectVoice(
-      output,
-      output,
-      preset,
-      options.pan ?? 0,
-      time,
-      this.envelopeLength(patch.ampEnvelope),
-    );
-    const oscillators = patch.operators.map((operator) => {
+    const oscillators = frequencies.map((frequency) => {
       const oscillator = context.createOscillator();
       oscillator.type = 'sine';
-      oscillator.frequency.value = Math.max(
-        20,
-        patch.baseFrequency *
-          2 ** ((options.tune ?? 0) / 12) *
-          operator.ratio *
-          2 ** ((operator.coarse * 12 + operator.fine / 100) / 12),
-      );
+      this.sweep(oscillator.frequency, frequency, patch.pitchEnvelope, time);
       return oscillator;
     });
-    const topology = FM_ALGORITHMS[patch.algorithm];
     const operatorGains = patch.operators.map((operator, index) => {
       const gain = context.createGain();
       this.scheduleEnvelope(
@@ -338,9 +502,9 @@ export class AudioEngine {
       oscillators[index].connect(gain);
       return gain;
     });
-    const mod = (from: number, to: number) =>
-      operatorGains[from].connect(oscillators[to].frequency);
-    topology.links.forEach(([from, to]) => mod(from, to));
+    topology.links.forEach(([from, to]) =>
+      operatorGains[from].connect(oscillators[to].frequency),
+    );
     topology.carriers.forEach((index) => operatorGains[index].connect(output));
     patch.operators.forEach((operator, index) => {
       if (operator.feedback > 0) {
@@ -352,69 +516,57 @@ export class AudioEngine {
           .connect(feedbackDelay)
           .connect(feedback)
           .connect(oscillators[index].frequency);
-        voice.nodes.push(feedback, feedbackDelay);
+        chain.nodes.push(feedback, feedbackDelay);
       }
       oscillators[index].start(time);
-      oscillators[index].stop(voice.stopAt);
+      oscillators[index].stop(chain.stopAt);
     });
-    voice.sources.push(...oscillators);
-    voice.nodes.push(...operatorGains);
-    this.attachModulation(
-      preset,
-      voice,
-      {
-        pitch: oscillators.map((oscillator) => oscillator.detune),
-        fmIndex: operatorGains
-          .filter((_, index) => !topology.carriers.includes(index))
-          .map((gain) => gain.gain),
-        amplitude: [output.gain],
-      },
-      time,
-      velocity,
-    );
-    this.trackVoice(voice);
+    chain.sources.push(...oscillators);
+    chain.nodes.push(...operatorGains);
+    return {
+      output,
+      detune: oscillators.map((oscillator) => oscillator.detune),
+      frequencies: topology.carriers.map((index) => ({
+        param: oscillators[index].frequency,
+        frequency: frequencies[index],
+      })),
+      fmIndex: operatorGains
+        .filter((_, index) => !topology.carriers.includes(index))
+        .map((gain) => ({ param: gain.gain, scale: patch.baseFrequency })),
+      tilt: [],
+    };
   }
 
-  private triggerAdditive(
+  private buildAdditive(
     patch: AdditivePatch,
-    preset: SynthPreset,
+    output: GainNode,
     time: number,
-    velocity: number,
-    options: TriggerOptions,
-  ) {
+    tuneRatio: number,
+    chain: VoiceNodes,
+  ): EngineVoice {
     const context = this.context!;
-    const output = context.createGain();
-    this.scheduleEnvelope(
-      output.gain,
-      patch.ampEnvelope,
-      time,
-      velocity * (options.volume ?? 1),
-    );
-    const voice = this.connectVoice(
+    const engine: EngineVoice = {
       output,
-      output,
-      preset,
-      options.pan ?? 0,
-      time,
-      this.envelopeLength(patch.ampEnvelope),
-    );
-    const tiltParams: AudioParam[] = [];
+      detune: [],
+      frequencies: [],
+      fmIndex: [],
+      tilt: [],
+    };
     patch.partials.forEach((partial, index) => {
       const oscillator = context.createOscillator();
       const gain = context.createGain();
       const panner = context.createStereoPanner();
       const ratio = partial.ratio + patch.inharmonicity * index * index;
-      oscillator.frequency.value = Math.max(
-        20,
-        patch.baseFrequency * 2 ** ((options.tune ?? 0) / 12) * ratio,
-      );
+      const frequency = patch.baseFrequency * tuneRatio * ratio;
+      this.sweep(oscillator.frequency, frequency, patch.pitchEnvelope, time);
       oscillator.detune.value = partial.detune;
       const tiltGain = context.createGain();
       tiltGain.gain.value = Math.max(
         0.06,
         1 - patch.spectralTilt * index * 0.12,
       );
-      if (index > 0) tiltParams.push(tiltGain.gain);
+      if (index > 0)
+        engine.tilt.push({ param: tiltGain.gain, scale: -0.12 * index });
       gain.gain.setValueAtTime(Math.max(0.0001, partial.amplitude), time);
       gain.gain.exponentialRampToValueAtTime(
         0.0001,
@@ -433,31 +585,16 @@ export class AudioEngine {
         .connect(panner)
         .connect(output);
       oscillator.start(time);
-      oscillator.stop(voice.stopAt);
-      voice.sources.push(oscillator);
-      voice.nodes.push(gain, panner, tiltGain);
+      oscillator.stop(chain.stopAt);
+      chain.sources.push(oscillator);
+      chain.nodes.push(gain, panner, tiltGain);
+      engine.detune.push(oscillator.detune);
+      engine.frequencies.push({ param: oscillator.frequency, frequency });
     });
-    this.attachModulation(
-      preset,
-      voice,
-      {
-        pitch: voice.sources
-          .filter(
-            (source): source is OscillatorNode =>
-              source instanceof OscillatorNode,
-          )
-          .map((oscillator) => oscillator.detune),
-        amplitude: [output.gain],
-        spectralTilt: tiltParams,
-      },
-      time,
-      velocity,
-    );
-    this.trackVoice(voice);
+    return engine;
   }
 
   private connectVoice(
-    input: AudioNode,
     output: GainNode,
     preset: SynthPreset,
     pan: number,
@@ -466,13 +603,12 @@ export class AudioEngine {
   ): VoiceNodes {
     const context = this.context!;
     const panner = context.createStereoPanner();
-    panner.pan.setValueAtTime(Math.max(-1, Math.min(1, pan)), time);
+    panner.pan.setValueAtTime(pan, time);
     const modulationGain = context.createGain();
     modulationGain.gain.value = 1;
     output.connect(modulationGain);
     let tail: AudioNode = modulationGain;
     const nodes: AudioNode[] = [output, panner, modulationGain];
-    if (input !== output) input.connect(output);
     for (const effect of preset.effects.filter(
       (item) =>
         item.enabled && ['drive', 'bitcrush', 'compressor'].includes(item.type),
@@ -560,59 +696,37 @@ export class AudioEngine {
     );
     param.exponentialRampToValueAtTime(
       0.0001,
-      time + this.envelopeLength(envelope),
-    );
-  }
-
-  private envelopeLength(envelope: Envelope) {
-    return Math.max(
-      0.04,
-      envelope.attack +
-        envelope.decay +
-        envelope.release +
-        (envelope.sustain > 0 ? 0.08 : 0),
+      time + envelopeLength(envelope),
     );
   }
 
   private attachModulation(
     preset: SynthPreset,
     voice: VoiceNodes,
-    destinations: Partial<Record<string, AudioParam[]>>,
+    destinations: Partial<Record<ModulationDestination, Target[]>>,
     time: number,
     velocity: number,
   ) {
     const context = this.context!;
-    // Volume modulation sits after the amplitude envelope, so it never opens
+    // Volume modulation sits after the amplitude envelopes, so it never opens
     // a decaying voice back up or bypasses a pad's volume/mute setting.
-    const targets = {
+    const volume = [{ param: voice.modulationGain, scale: 0.5 }];
+    const targets: Partial<Record<ModulationDestination, Target[]>> = {
       ...destinations,
-      amplitude: [voice.modulationGain],
-      level: [voice.modulationGain],
-      pan: [voice.pan],
-    };
-    const scales: Record<string, number> = {
-      pitch: 1200,
-      cutoff: 5000,
-      resonance: 8,
-      amplitude: 0.5,
-      level: 0.5,
-      pan: 1,
-      fmIndex: preset.patch.baseFrequency,
-      spectralTilt: -0.12,
+      amplitude: volume,
+      level: volume,
+      pan: [{ param: voice.pan, scale: 1 }],
     };
     const routeSignal = (
       source: AudioScheduledSourceNode,
-      destination: string,
+      destination: ModulationDestination,
       amount: number,
     ) => {
-      const params = targets[destination as keyof typeof targets];
+      const params = targets[destination];
       if (!params?.length || amount === 0) return;
-      params.forEach((param, index) => {
+      params.forEach(({ param, scale }) => {
         const gain = context.createGain();
-        gain.gain.value =
-          amount *
-          (scales[destination] ?? 1) *
-          (destination === 'spectralTilt' ? index + 1 : 1);
+        gain.gain.value = amount * scale;
         source.connect(gain).connect(param);
         voice.nodes.push(gain);
       });
@@ -620,33 +734,23 @@ export class AudioEngine {
       source.stop(voice.stopAt);
       voice.sources.push(source);
     };
-    const createLfo = (index: number) => {
-      const definition = preset.patch.lfos[index];
-      if (!definition) return null;
-      const oscillator = context.createOscillator();
-      oscillator.type = definition.shape;
-      oscillator.frequency.value = definition.rate;
-      return oscillator;
-    };
-    preset.patch.lfos.forEach((definition, index) => {
-      if (definition.depth === 0) return;
-      const oscillator = createLfo(index)!;
-      routeSignal(oscillator, definition.destination, definition.depth);
-    });
+    const { lfos, engines, filterEnvelope } = preset.voice;
     preset.modulation.forEach((route) => {
       if (route.amount === 0) return;
       if (route.source === 'lfo1' || route.source === 'lfo2') {
-        const oscillator = createLfo(route.source === 'lfo1' ? 0 : 1);
-        if (oscillator)
-          routeSignal(oscillator, route.destination, route.amount);
+        const definition = lfos[route.source === 'lfo1' ? 0 : 1];
+        const oscillator = context.createOscillator();
+        oscillator.type = definition.shape;
+        oscillator.frequency.value = definition.rate;
+        routeSignal(oscillator, route.destination, route.amount);
         return;
       }
       const source = context.createConstantSource();
       if (route.source === 'ampEnv' || route.source === 'modEnv') {
         const envelope =
-          route.source === 'modEnv' && preset.patch.engine === 'subtractive'
-            ? preset.patch.filterEnvelope
-            : preset.patch.ampEnvelope;
+          route.source === 'modEnv'
+            ? filterEnvelope
+            : engines[0].patch.ampEnvelope;
         this.scheduleEnvelope(source.offset, envelope, time, 1);
       } else {
         source.offset.value =

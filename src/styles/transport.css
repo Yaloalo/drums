@@ -1,0 +1,315 @@
+/* Transport: play/stop, tempo and the metronome sit in one cluster. */
+.transport-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.transport-bar button {
+  width: auto;
+  min-height: 40px;
+  padding: 8px;
+}
+.transport-bar .transport-play {
+  min-width: 82px;
+  background: var(--accent);
+  color: var(--tool-active-ink);
+  border-color: var(--accent);
+}
+.transport-play.is-playing {
+  box-shadow: inset 0 0 0 2px var(--tool-active-ink);
+}
+.transport-stop svg {
+  width: 12px;
+  height: 12px;
+}
+.tempo-control {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  padding: 0 6px;
+}
+.tempo-control input {
+  appearance: textfield;
+  width: 56px;
+  padding: 6px;
+  font-size: 17px;
+  font-weight: 650;
+  text-align: center;
+}
+.tempo-control input::-webkit-inner-spin-button,
+.tempo-control input::-webkit-outer-spin-button {
+  appearance: none;
+  display: none;
+  margin: 0;
+}
+.tempo-control span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+/* A split control: the left half toggles the click, the right opens settings. */
+.metronome-control {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+.transport-bar .metronome-toggle {
+  gap: 8px;
+  padding-inline: 10px;
+  border-radius: 5px 0 0 5px;
+  color: var(--muted);
+}
+.metronome-toggle.enabled {
+  color: var(--accent);
+  background: var(--accent-light);
+  border-color: var(--accent-border);
+}
+.metronome-dots {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 14px;
+}
+/* Height, fill and border style mark accent / click / silent. */
+.metronome-dots i {
+  width: 5px;
+  height: 8px;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.35;
+}
+.metronome-dots i.accent {
+  height: 13px;
+}
+.metronome-dots i.off {
+  height: 5px;
+  background: transparent;
+  border: 1px dashed currentColor;
+}
+.metronome-dots i.lit {
+  opacity: 1;
+}
+.metronome-dots i.accent.lit {
+  background: var(--chord);
+  color: var(--chord);
+}
+.metronome-count {
+  min-width: 14px;
+  font-size: 12px;
+  font-weight: 650;
+}
+.transport-bar .metronome-meter-button {
+  gap: 3px;
+  margin-left: -1px;
+  padding-inline: 8px;
+  border-radius: 0 5px 5px 0;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.metronome-meter-button svg {
+  width: 13px;
+  height: 13px;
+  color: var(--muted);
+}
+.metronome-meter-button[data-popup-open] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.metronome-panel {
+  width: min(340px, calc(100vw - 24px));
+  max-height: min(640px, calc(100dvh - 96px));
+  overflow-y: auto;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 18px 44px var(--overlay);
+  outline: none;
+  transition:
+    opacity 100ms,
+    transform 100ms;
+}
+.metronome-panel[data-starting-style],
+.metronome-panel[data-ending-style] {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.metronome-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.metronome-panel-title {
+  margin: 0;
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+.metronome-panel > header strong {
+  font-size: 15px;
+  font-weight: 650;
+}
+.metronome-panel section {
+  padding-top: 14px;
+}
+.metronome-panel h3 {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.metronome-panel h3 small {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.meter-editor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.meter-stepper {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.meter-stepper button {
+  width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+}
+.meter-stepper output {
+  min-width: 28px;
+  font-size: 18px;
+  font-weight: 650;
+  text-align: center;
+}
+.meter-slash {
+  color: var(--muted);
+  font-size: 18px;
+}
+.meter-units,
+.meter-presets,
+.click-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.meter-units button,
+.meter-presets button,
+.click-presets button {
+  min-height: 34px;
+  padding: 6px 9px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+.meter-presets {
+  margin-top: 8px;
+}
+.meter-presets button {
+  flex: 1 0 calc(25% - 4px);
+}
+.click-presets button {
+  flex: 1;
+  font-size: 11px;
+}
+:is(.meter-units, .meter-presets, .click-presets) button.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+.click-beats {
+  display: grid;
+  grid-template-columns: repeat(var(--beats), minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.click-beat {
+  position: relative;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 4px;
+  min-height: 62px;
+  padding: 6px 0;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 650;
+}
+.click-beat i {
+  width: 55%;
+  max-width: 18px;
+  height: 22px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.55;
+}
+.click-beat.accent {
+  color: var(--chord);
+}
+.click-beat.accent i {
+  height: 34px;
+  opacity: 0.9;
+}
+.click-beat.off {
+  color: var(--muted);
+  border-style: dashed;
+}
+.click-beat.off i {
+  height: 8px;
+  background: transparent;
+  border: 1px dashed currentColor;
+}
+.click-beat.lit {
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+.metronome-note {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+@media (pointer: coarse) {
+  .transport-bar button,
+  .meter-stepper button {
+    min-height: 44px;
+  }
+}
+@media (max-width: 700px) {
+  .tempo-control {
+    gap: 4px;
+    padding: 0 3px;
+  }
+}
+@media (max-width: 400px) {
+  .transport-bar .transport-play {
+    min-width: 0;
+  }
+  .transport-bar .metronome-toggle {
+    padding-inline: 8px;
+    gap: 6px;
+  }
+  .transport-stop span {
+    display: none;
+  }
+}

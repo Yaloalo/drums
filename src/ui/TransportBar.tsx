@@ -1,7 +1,8 @@
 'use client';
 
-import { Pause, Play } from 'lucide-react';
+import { Pause, Play, Square } from 'lucide-react';
 import { useApp } from '../state/AppContext';
+import { MetronomeControl } from './Metronome';
 
 export function TransportBar({ compact = false }: { compact?: boolean }) {
   const { transport, toggleTransport, stopTransport, updateTransport } =
@@ -20,8 +21,13 @@ export function TransportBar({ compact = false }: { compact?: boolean }) {
         {transport.playing ? 'Pause' : 'Play'}
       </button>
       {!compact && (
-        <button onClick={stopTransport} aria-label="Stop sequence">
-          Stop
+        <button
+          className="transport-stop"
+          onClick={stopTransport}
+          aria-label="Stop sequence"
+        >
+          <Square />
+          <span>Stop</span>
         </button>
       )}
       <label className="tempo-control">
@@ -40,6 +46,7 @@ export function TransportBar({ compact = false }: { compact?: boolean }) {
         />
         <span>BPM</span>
       </label>
+      <MetronomeControl />
     </div>
   );
 }

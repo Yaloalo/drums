@@ -1,0 +1,203 @@
+/* Searchable menus replace native selects: a bordered trigger and a portalled list. */
+.search-menu-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-width: 0;
+  min-height: 38px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  text-align: left;
+}
+.search-menu-trigger[data-popup-open] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.search-menu-caption {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 1px;
+}
+.search-menu-value {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.search-menu-value strong,
+.search-menu-value small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.search-menu-value strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+.search-menu-value small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 550;
+}
+.search-menu-trigger .search-menu-chevron {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+  transition: transform 100ms;
+}
+.search-menu-trigger[data-popup-open] .search-menu-chevron {
+  transform: rotate(180deg);
+  color: var(--accent);
+}
+.search-menu-positioner {
+  z-index: 70;
+}
+.search-menu {
+  display: flex;
+  flex-direction: column;
+  width: max(var(--anchor-width), 260px);
+  max-width: min(420px, calc(100vw - 24px));
+  /* Not --available-height: it changes as the popup flips, which makes the
+     positioner's resize observer loop near the bottom of the screen. */
+  max-height: min(430px, 55dvh);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 18px 44px var(--overlay);
+  outline: none;
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity 100ms,
+    transform 100ms;
+}
+.search-menu[data-starting-style],
+.search-menu[data-ending-style] {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.search-menu-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+}
+.search-menu-search svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+.search-menu-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 11px 0;
+  color: var(--ink);
+  font-size: 14px;
+}
+.search-menu-search input:focus-visible {
+  outline: none;
+}
+.search-menu-search:focus-within {
+  color: var(--accent);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.search-menu-list {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+}
+.search-menu-list:focus-visible {
+  outline: none;
+}
+.search-menu-group {
+  position: sticky;
+  top: -4px;
+  z-index: 1;
+  padding: 10px 8px 5px;
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+.search-menu-option {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  user-select: none;
+}
+.search-menu-option[data-active] {
+  background: var(--accent-light);
+}
+.search-menu-option[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: default;
+}
+.search-menu-option[aria-selected='true'] strong {
+  color: var(--accent);
+}
+.search-menu-mark {
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+}
+.search-menu-mark svg {
+  width: 14px;
+  height: 14px;
+}
+.search-menu-text {
+  min-width: 0;
+}
+.search-menu-text strong,
+.search-menu-text small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.search-menu-text strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.search-menu-text small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+}
+.search-menu-option > i {
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+.search-menu-empty {
+  padding: 18px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+@media (pointer: coarse) {
+  .search-menu-option {
+    min-height: 44px;
+  }
+}

@@ -2,24 +2,22 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { audioEngine } from '../audio/AudioEngine';
-import type { DrumKit, Exercise, ExerciseAttempt, ExerciseHit, Pattern, PatternStep, SynthEngineType, SynthPreset, TransportState } from '../model/types';
+import type { ClickLevel, DrumKit, ExerciseHit, Pattern, PatternStep, SynthEngineType, SynthPreset, TransportState } from '../model/types';
 import { cloneSerializable } from '../model/types';
 import { dbGet, dbGetAll, dbPut } from '../persistence/database';
 import { cloneKit, clonePreset, FACTORY_KITS, FACTORY_PRESETS } from '../presets/factorySounds';
 import { RHYTHM_PRESETS, rhythmById } from '../presets/rhythms';
-import { scorePerformance } from '../training/scoring';
 import { TransportService } from '../transport/TransportService';
-import { selectEngine } from '../audio/synthTopology';
-import { resizePattern, secondsPerBeat } from '../transport/timing';
+import { normalizePreset, selectSlotEngine, type LegacySynthPreset } from '../model/voice';
+import { resizePattern, setPatternMeter } from '../transport/timing';
 
 export type Area = 'pads' | 'synth' | 'sequencer' | 'exercises' | 'song';
 const AREAS: Area[] = ['pads', 'synth', 'sequencer', 'exercises', 'song'];
 
-interface ActiveExerciseState {
-  exercise: Exercise;
-  startedAt: number;
-  startAudioTime: number;
-  hits: ExerciseHit[];
+/** Which sequencer lanes are folded, remembered per pattern. */
+export interface LaneView {
+  patternId: string;
+  collapsed: string[];
 }
 
 interface AppContextValue {
@@ -34,11 +32,13 @@ interface AppContextValue {
   customPatterns: Pattern[];
   transport: TransportState;
   selectedStep: { track: number; step: number } | null;
-  activeExercise: ActiveExerciseState | null;
-  lastAttempt: ExerciseAttempt | null;
-  attempts: ExerciseAttempt[];
   hydrated: boolean;
-  triggerPad: (index: number, velocity?: number) => void;
+  /** `eventTime` is the DOM event timestamp, used to time the hit as heard. */
+  triggerPad: (index: number, velocity?: number, eventTime?: number) => void;
+  onPadHit: (listener: (hit: ExerciseHit) => void) => () => void;
+  /** Plays this pattern instead of the user's own, e.g. during practice. */
+  setPatternOverride: (pattern: Pattern | null) => void;
+  transportService: TransportService;
   selectPad: (index: number) => void;
   loadKit: (id: string) => void;
   saveKit: () => void;
@@ -50,7 +50,7 @@ interface AppContextValue {
   resetSelectedPreset: () => void;
   saveSelectedPreset: (name?: string) => void;
   duplicateSelectedPreset: () => void;
-  switchEngine: (engine: SynthEngineType) => void;
+  switchSlotEngine: (slot: 0 | 1, engine: SynthEngineType) => void;
   updateTransport: (patch: Partial<TransportState>) => void;
   toggleTransport: () => void;
   stopTransport: () => void;
@@ -59,14 +59,14 @@ interface AppContextValue {
   setSelectedStep: (value: { track: number; step: number } | null) => void;
   clearPattern: () => void;
   setBars: (bars: number) => void;
+  setMeter: (beatsPerBar: number, beatUnit: number) => void;
+  laneView: LaneView | null;
+  setLaneView: (view: LaneView) => void;
   duplicateBar: () => void;
   undo: () => void;
   redo: () => void;
   loadRhythm: (id: string) => void;
   savePattern: () => void;
-  startExercise: (exercise: Exercise) => void;
-  finishExercise: () => void;
-  cancelExercise: () => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -85,14 +85,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [customPatterns, setCustomPatterns] = useState<Pattern[]>([]);
   const [selectedPadIndex, setSelectedPadIndex] = useState(0);
   const [selectedStep, setSelectedStep] = useState<{ track: number; step: number } | null>(null);
-  const [transport, setTransport] = useState<TransportState>({ bpm: 112, playing: false, paused: false, loop: true, swing: .06, metronome: false, recording: false, overdub: true, quantize: true, countIn: 0, currentStep: 0 });
-  const [activeExercise, setActiveExercise] = useState<ActiveExerciseState | null>(null);
-  const [lastAttempt, setLastAttempt] = useState<ExerciseAttempt | null>(null);
-  const [attempts, setAttempts] = useState<ExerciseAttempt[]>([]);
+  const [transport, setTransport] = useState<TransportState>({ bpm: 112, playing: false, paused: false, loop: true, swing: .06, metronome: false, clickLevels: [], countIn: 0, currentStep: 0 });
+  const [laneView, setLaneView] = useState<LaneView | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const undoStack = useRef<Pattern[]>([]);
   const redoStack = useRef<Pattern[]>([]);
   const patternRef = useRef(pattern);
+  const patternOverride = useRef<Pattern | null>(null);
+  const padHitListeners = useRef(new Set<(hit: ExerciseHit) => void>());
   const kitRef = useRef(kit);
   const customPresetsRef = useRef(customPresets);
   const overridesRef = useRef(sessionOverrides);
@@ -104,7 +104,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   /* oxlint-disable react/react-compiler -- The transport deliberately reads live refs from its long-lived Web Audio scheduler. */
   const transportService = useMemo(() => new TransportService(
-    () => patternRef.current,
+    () => patternOverride.current ?? patternRef.current,
     (padId, velocity, time) => {
       const currentKit = kitRef.current;
       const pad = currentKit.pads.find((item) => item.id === padId);
@@ -119,13 +119,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     Promise.all([
-      dbGet<{ id: string; kit?: DrumKit; pattern?: Pattern; bpm?: number; swing?: number; area?: Area }>('session', 'current'),
-      dbGetAll<SynthPreset>('customPresets'), dbGetAll<DrumKit>('customKits'), dbGetAll<Pattern>('customPatterns'), dbGetAll<ExerciseAttempt>('attempts'),
-    ]).then(([session, savedPresets, savedKits, savedPatterns, savedAttempts]) => {
-      setCustomPresets(savedPresets); setCustomKits(savedKits); setCustomPatterns(savedPatterns); setAttempts(savedAttempts);
+      dbGet<{ id: string; kit?: DrumKit; pattern?: Pattern; bpm?: number; swing?: number; clickLevels?: ClickLevel[]; area?: Area }>('session', 'current'),
+      dbGetAll<SynthPreset | LegacySynthPreset>('customPresets'), dbGetAll<DrumKit>('customKits'), dbGetAll<Pattern>('customPatterns'),
+    ]).then(([session, savedPresets, savedKits, savedPatterns]) => {
+      setCustomPresets(savedPresets.map(normalizePreset)); setCustomKits(savedKits); setCustomPatterns(savedPatterns);
       if (session?.kit) setKit(session.kit);
       if (session?.pattern) setPattern(session.pattern);
       if (session?.bpm) transportService.update({ bpm: session.bpm, swing: session.swing ?? .06 });
+      if (session?.clickLevels) transportService.update({ clickLevels: session.clickLevels });
       const requestedArea = new URLSearchParams(window.location.search).get('area');
       if (requestedArea && AREAS.includes(requestedArea as Area)) setAreaState(requestedArea as Area);
       else if (session?.area) setAreaState(session.area);
@@ -136,9 +137,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return;
-    const timer = window.setTimeout(() => dbPut('session', { id: 'current', kit, pattern, bpm: transport.bpm, swing: transport.swing, area }).catch(() => undefined), 500);
+    const timer = window.setTimeout(() => dbPut('session', { id: 'current', kit, pattern, bpm: transport.bpm, swing: transport.swing, clickLevels: transport.clickLevels, area }).catch(() => undefined), 500);
     return () => window.clearTimeout(timer);
-  }, [area, hydrated, kit, pattern, transport.bpm, transport.swing]);
+  }, [area, hydrated, kit, pattern, transport.bpm, transport.swing, transport.clickLevels]);
 
   const setArea = useCallback((next: Area) => setAreaState(next), []);
   const selectedPreset = resolvePreset(kit.pads[selectedPadIndex]?.presetId, customPresets, sessionOverrides);
@@ -152,25 +153,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setPattern(next);
   }, []);
 
-  const triggerPad = useCallback((index: number, velocity = .9) => {
+  const triggerPad = useCallback((index: number, velocity = .9, eventTime = performance.now()) => {
     const pad = kitRef.current.pads[index];
-    if (!pad || pad.muted) return;
+    if (!pad) return;
     void audioEngine.initialize().then(() => {
-      const hitTime = audioEngine.currentTime;
-      audioEngine.trigger(resolvePreset(pad.presetId, customPresetsRef.current, overridesRef.current), { padId: pad.id, velocity, volume: pad.volume, pan: pad.pan, tune: pad.tune });
-      setActiveExercise((current) => current ? { ...current, hits: [...current.hits, { padIndex: index, time: hitTime, velocity }] } : current);
-      const currentTransport = transportService.snapshot;
-      if (currentTransport.recording && currentTransport.playing) {
-        const step = currentTransport.currentStep;
-        setPattern((current) => {
-          const next = cloneSerializable(current);
-          const trackIndex = next.tracks.findIndex((track) => track.padId === pad.id);
-          if (trackIndex >= 0 && next.tracks[trackIndex].steps[step]) next.tracks[trackIndex].steps[step] = { active: true, velocity, accent: velocity > .92, probability: 1, microtiming: currentTransport.quantize ? 0 : 0 };
-          return next;
-        });
-      }
+      // A tap counts for practice even on a muted pad.
+      const hit = { padIndex: index, time: audioEngine.audibleTime(eventTime), velocity };
+      padHitListeners.current.forEach((listener) => listener(hit));
+      if (!pad.muted) audioEngine.trigger(resolvePreset(pad.presetId, customPresetsRef.current, overridesRef.current), { padId: pad.id, velocity, volume: pad.volume, pan: pad.pan, tune: pad.tune });
     });
-  }, [transportService]);
+  }, []);
+  const onPadHit = useCallback((listener: (hit: ExerciseHit) => void) => {
+    padHitListeners.current.add(listener);
+    return () => { padHitListeners.current.delete(listener); };
+  }, []);
+  const setPatternOverride = useCallback((next: Pattern | null) => {
+    patternOverride.current = next;
+  }, []);
 
   const loadKit = useCallback((id: string) => {
     const next = [...FACTORY_KITS, ...customKits].find((item) => item.id === id);
@@ -202,17 +201,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setCustomPresets((current) => [...current, next]); updatePad(selectedPadIndex, { presetId: next.id }); void dbPut('customPresets', next);
   }, [selectedPadIndex, selectedPreset, updatePad]);
   const duplicateSelectedPreset = useCallback(() => saveSelectedPreset(`${selectedPreset.name} Copy`), [saveSelectedPreset, selectedPreset.name]);
-  const switchEngine = useCallback((engine: SynthEngineType) => {
-    const source = FACTORY_PRESETS.find((item) => item.engineType === engine)!;
-    updateSelectedPreset(selectEngine(selectedPreset, engine, source));
-  }, [selectedPreset, updateSelectedPreset]);
+  const switchSlotEngine = useCallback((slot: 0 | 1, engine: SynthEngineType) => updateSelectedPreset(selectSlotEngine(selectedPreset, slot, engine)), [selectedPreset, updateSelectedPreset]);
 
+  /* oxlint-disable react/react-compiler -- These callbacks intentionally expose stable access to the long-lived transport service and mutable scheduler refs. */
   const updateTransport = useCallback((patch: Partial<TransportState>) => transportService.update(patch), [transportService]);
   const toggleTransport = useCallback(() => { void transportService.toggle(); }, [transportService]);
   const stopTransport = useCallback(() => transportService.stop(), [transportService]);
   const toggleStep = useCallback((track: number, step: number, forced?: boolean) => {
     const next = cloneSerializable(patternRef.current); const target = next.tracks[track]?.steps[step]; if (!target) return;
-    target.active = forced ?? !target.active; pushPattern(next); setSelectedStep({ track, step });
+    target.active = forced ?? !target.active; pushPattern(next); setSelectedStep(target.active ? { track, step } : null);
   }, [pushPattern]);
   const updateStep = useCallback((track: number, step: number, patch: Partial<PatternStep>) => {
     const next = cloneSerializable(patternRef.current); if (!next.tracks[track]?.steps[step]) return;
@@ -220,39 +217,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [pushPattern]);
   const clearPattern = useCallback(() => { const next = cloneSerializable(patternRef.current); next.tracks.forEach((track) => track.steps.forEach((step) => { step.active = false; })); pushPattern(next); }, [pushPattern]);
   const setBars = useCallback((bars: number) => pushPattern(resizePattern(patternRef.current, bars)), [pushPattern]);
+  const setMeter = useCallback((beatsPerBar: number, beatUnit: number) => {
+    const current = patternRef.current;
+    if (current.beatsPerBar === beatsPerBar && current.beatUnit === beatUnit) return;
+    const next = setPatternMeter(current, beatsPerBar, beatUnit);
+    pushPattern(next);
+    // The scheduler reads this ref; update it now so the click realigns to the new bar.
+    patternRef.current = next;
+    transportService.realign();
+  }, [pushPattern, transportService]);
   const duplicateBar = useCallback(() => { const current = patternRef.current; if (current.bars >= 4) return; const next = resizePattern(current, current.bars + 1); next.tracks.forEach((track, index) => { for (let step = 0; step < current.stepsPerBar; step += 1) track.steps[current.bars * current.stepsPerBar + step] = cloneSerializable(current.tracks[index].steps[step]); }); pushPattern(next); }, [pushPattern]);
   const undo = useCallback(() => { const previous = undoStack.current.pop(); if (!previous) return; redoStack.current.push(cloneSerializable(patternRef.current)); setPattern(previous); }, []);
   const redo = useCallback(() => { const next = redoStack.current.pop(); if (!next) return; undoStack.current.push(cloneSerializable(patternRef.current)); setPattern(next); }, []);
   const loadRhythm = useCallback((id: string) => { const rhythm = rhythmById(id); setPattern(cloneSerializable(rhythm.pattern)); transportService.update({ bpm: rhythm.bpm }); }, [transportService]);
   const savePattern = useCallback(() => { const next = { ...cloneSerializable(pattern), id: `custom-pattern-${Date.now()}`, name: `${pattern.name} Copy`, factory: false }; setCustomPatterns((current) => [...current, next]); setPattern(next); void dbPut('customPatterns', next); }, [pattern]);
-
-  const startExercise = useCallback((exercise: Exercise) => {
-    const exerciseKit = FACTORY_KITS.find((item) => item.id === exercise.kitPresetId) ?? FACTORY_KITS.at(-1)!;
-    const rhythm = rhythmById(exercise.rhythmPresetId);
-    setKit(cloneSerializable(exerciseKit)); setPattern(cloneSerializable(rhythm.pattern)); setSelectedPadIndex(exercise.targetPads[0] ?? 0);
-    transportService.update({ bpm: exercise.bpm, metronome: exercise.metronome.enabled, loop: true });
-    void audioEngine.initialize().then(() => {
-      const startAudioTime = audioEngine.currentTime + exercise.countIn * secondsPerBeat(exercise.bpm);
-      setActiveExercise({ exercise, startedAt: Date.now(), startAudioTime, hits: [] });
-      setAreaState('pads'); void transportService.play();
-    });
-  }, [transportService]);
-
-  const finishExercise = useCallback(() => {
-    if (!activeExercise) return;
-    const { exercise, startAudioTime, hits, startedAt } = activeExercise;
-    const stepDuration = secondsPerBeat(exercise.bpm) / 4;
-    const expected = Array.from({ length: exercise.bars }, (_, bar) => exercise.targetSteps.map((step, index) => ({ time: startAudioTime + (bar * 16 + step) * stepDuration, padIndex: exercise.targetPads[index % exercise.targetPads.length] }))).flat();
-    const attempt = scorePerformance({ exerciseId: exercise.id, expected, actual: hits, toleranceMs: exercise.toleranceMs, startedAt });
-    setLastAttempt(attempt); setAttempts((current) => [attempt, ...current]); setActiveExercise(null); setAreaState('exercises'); transportService.stop(); void dbPut('attempts', attempt);
-  }, [activeExercise, transportService]);
-  const cancelExercise = useCallback(() => { setActiveExercise(null); transportService.stop(); setAreaState('exercises'); }, [transportService]);
+  /* oxlint-enable react/react-compiler */
 
   const value: AppContextValue = {
-    area, setArea, kit, kits, presets, selectedPadIndex, selectedPreset, pattern, customPatterns, transport, selectedStep, activeExercise, lastAttempt, attempts, hydrated,
-    triggerPad, selectPad: setSelectedPadIndex, loadKit, saveKit, resetKit, updatePad, movePad, assignPreset, updateSelectedPreset, resetSelectedPreset, saveSelectedPreset, duplicateSelectedPreset, switchEngine,
-    updateTransport, toggleTransport, stopTransport, toggleStep, updateStep, setSelectedStep, clearPattern, setBars, duplicateBar, undo, redo, loadRhythm, savePattern,
-    startExercise, finishExercise, cancelExercise,
+    area, setArea, kit, kits, presets, selectedPadIndex, selectedPreset, pattern, customPatterns, transport, selectedStep, hydrated,
+    triggerPad, onPadHit, setPatternOverride, transportService, selectPad: setSelectedPadIndex, loadKit, saveKit, resetKit, updatePad, movePad, assignPreset, updateSelectedPreset, resetSelectedPreset, saveSelectedPreset, duplicateSelectedPreset, switchSlotEngine,
+    updateTransport, toggleTransport, stopTransport, toggleStep, updateStep, setSelectedStep, clearPattern, setBars, setMeter, laneView, setLaneView, duplicateBar, undo, redo, loadRhythm, savePattern,
   };
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

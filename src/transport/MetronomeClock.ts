@@ -1,3 +1,5 @@
+import type { ClickLevel } from '../model/types.ts';
+
 export interface ClickBeat {
   time: number;
   beat: number;
@@ -41,4 +43,20 @@ export class MetronomeClock {
     }
     return result;
   }
+}
+
+/** The level for every beat of a bar; beats without a setting click
+ * normally, with an accent on beat one. */
+export function clickLevelsFor(
+  levels: readonly ClickLevel[] | undefined,
+  beats: number,
+): ClickLevel[] {
+  return Array.from(
+    { length: Math.max(1, beats) },
+    (_, beat) => levels?.[beat] ?? (beat === 0 ? 'accent' : 'normal'),
+  );
+}
+
+export function nextClickLevel(level: ClickLevel): ClickLevel {
+  return level === 'accent' ? 'normal' : level === 'normal' ? 'off' : 'accent';
 }

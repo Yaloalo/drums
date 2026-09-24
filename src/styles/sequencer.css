@@ -1,10 +1,12 @@
 .sequencer-screen {
   --rail: 150px;
   --step-min: 34px;
-  --row-h: 40px;
+  --row-h: 38px;
+  --lane-h: 16px;
+  --bar-gap: 8px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 .machine-header {
   margin-bottom: 6px;
@@ -70,8 +72,11 @@
   font-size: 10px;
 }
 .step-ruler i.beat {
-  color: var(--ink);
+  color: var(--muted);
   font-weight: 650;
+}
+.step-ruler i.bar {
+  color: var(--ink);
 }
 .track-spacer {
   position: sticky;
@@ -80,14 +85,36 @@
   display: flex;
   align-items: center;
   background: var(--surface);
-  padding-left: 8px;
   color: var(--muted);
   font-size: 10px;
   letter-spacing: 1px;
 }
+.track-spacer button {
+  width: 100%;
+  min-height: 28px;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 4px 8px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.track-spacer button svg {
+  width: 13px;
+  height: 13px;
+}
 .track-row {
   min-height: var(--row-h);
-  margin-bottom: 5px;
+  margin-bottom: 4px;
+}
+/* Bars are separated by space rather than another line. */
+.step-cell.bar-start,
+.step-ruler i.bar-start,
+.lane-strip i.bar-start {
+  margin-left: var(--bar-gap);
 }
 .track-label {
   position: sticky;
@@ -95,16 +122,20 @@
   z-index: 3;
   min-width: 0;
   min-height: var(--row-h);
+  gap: 6px;
+  overflow: hidden;
   border-color: transparent;
   border-radius: 4px;
   background: var(--rail-bg);
-  padding: 0 12px;
+  padding: 0 10px 0 6px;
   justify-content: flex-start;
   text-align: left;
   font-size: 11px;
 }
-.track-label > i {
-  display: none;
+.track-label > svg {
+  width: 13px;
+  height: 13px;
+  color: var(--muted);
 }
 .track-label span {
   white-space: nowrap;
@@ -115,6 +146,64 @@
   margin-left: 8px;
   font-size: 9px;
   color: var(--muted);
+}
+/* A folded lane is a thin strip: its hits as ticks, flashing when it plays. */
+.track-row.collapsed {
+  min-height: var(--lane-h);
+  margin-bottom: 3px;
+}
+.track-row.collapsed .track-label {
+  min-height: var(--lane-h);
+  padding-block: 0;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.4px;
+}
+.track-row.collapsed .track-label > svg {
+  width: 11px;
+  height: 11px;
+}
+.lane-strip {
+  position: relative;
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: repeat(var(--steps), minmax(var(--step-min), 1fr));
+  gap: 4px;
+  align-items: center;
+  min-height: var(--lane-h);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--pad-off);
+}
+.lane-strip i {
+  height: 4px;
+  margin-inline: 30%;
+  border-radius: 2px;
+}
+.lane-strip i.on {
+  background: var(--accent);
+}
+.lane-strip i.on.accent {
+  height: 6px;
+  background: var(--chord);
+}
+.lane-strip i.playhead {
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.lane-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--chord);
+  opacity: 0;
+  pointer-events: none;
+}
+.track-label .lane-flash {
+  inset: auto auto 0 0;
+  width: 3px;
+  height: 100%;
 }
 .step-cell {
   position: relative;
@@ -201,15 +290,14 @@
   font-size: 11px;
 }
 .step-inspector {
-  padding: 14px 18px;
-  border: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: 8px 10px 8px 16px;
+  border: 1px solid var(--accent-border);
   border-radius: 7px;
   background: var(--surface);
-}
-.step-inspector header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
 }
 .step-inspector header span {
   display: block;
@@ -220,16 +308,15 @@
 .step-inspector header strong {
   font-size: 13px;
   font-weight: 650;
+  white-space: nowrap;
 }
-.step-inspector header button {
-  font-size: 20px;
-  padding: 4px 10px;
+.step-inspector-close {
+  padding: 8px;
 }
 .step-params {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   gap: 20px;
-  margin-top: 12px;
 }
 .step-params > label {
   display: grid;
@@ -255,16 +342,11 @@
   color: var(--chord);
   font-size: 10px;
 }
-.step-empty {
-  color: var(--muted);
-  text-align: center;
-  font-size: 12px;
-  padding: 3px;
-}
 @media (pointer: coarse), (max-width: 1100px) {
   .sequencer-screen {
-    --step-min: 44px;
-    --row-h: 44px;
+    --step-min: 42px;
+    --row-h: 42px;
+    --lane-h: 22px;
   }
 }
 @media (max-width: 700px) {
@@ -275,10 +357,6 @@
   }
   .machine-header .screen-title {
     grid-column: 1;
-    grid-row: 1;
-  }
-  .machine-header .back-control {
-    grid-column: 2;
     grid-row: 1;
   }
   .machine-header .transport-bar {
@@ -342,10 +420,17 @@
     margin-left: 0;
   }
   .step-params {
+    grid-column: 1 / -1;
+    grid-row: 2;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    gap: 4px 12px;
   }
   .step-inspector {
-    padding: 12px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 12px;
+    padding: 8px 8px 10px 12px;
+  }
+  .track-spacer button {
+    padding-inline: 6px;
   }
 }

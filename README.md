@@ -43,7 +43,7 @@ Space toggles the global transport.
 
 The interface follows `style.md` and the supplied reference captures: turquoise for selection and interaction, burnt orange for accents, flat bordered surfaces, and the same light/dark colour tokens, typography, and corner sizes. The theme follows the system when the app opens; the header toggle switches it for the current session.
 
-The 4×4 pads remain square at phone and desktop sizes. Each pad contains a waveform generated with `OfflineAudioContext` through the same subtractive, FM, or additive voice and effects graph used for playback. Preview rendering is queued and cached separately from live audio. Synth edits, preset assignments, and pad tuning invalidate the corresponding preview. Noise-based previews represent the patch rather than the exact random samples of every subsequent hit. Live and sequencer hits illuminate the pad and animate its waveform playhead; reduced-motion settings disable that movement.
+The 4×4 pads remain square at phone and desktop sizes. Each pad contains a waveform generated with `OfflineAudioContext` through the same two-engine voice and effects graph used for playback. Preview rendering is queued and cached separately from live audio. Synth edits, preset assignments, and pad tuning invalidate the corresponding preview. Noise-based previews represent the patch rather than the exact random samples of every subsequent hit. Live and sequencer hits illuminate the pad and animate its waveform playhead; reduced-motion settings disable that movement.
 
 Shared tokens and controls live in `app/globals.css`; feature styles are separated under `src/styles/`. Sequencer velocity has redundant visual cues: soft hits use a dashed border and ring, normal hits a turquoise dot and half fill, and accents an orange dot, full fill, and heavier border.
 
@@ -58,29 +58,49 @@ Navigation is swipe-only. Swipe across the app header or a screen heading, away 
 
 The transport belongs to the application, not the Drum Machine screen. Start a pattern, return to Pads, perform over it, and edit its sounds without stopping playback.
 
-The labelled **Metronome** control works independently of sequence playback. It shares the BPM, follows the current pattern's meter, accents beat one, and displays beat indicators against the audio clock. Swing affects drum steps, not the reference click. Stopping or pausing the sequence leaves the metronome running; turn its own control off to silence it. Recording is armed with **Record pads** in the Drum Machine.
+The **metronome** sits in the transport, next to Play and the tempo, on both Pads and the Drum Machine. Its left half switches the click on and off and shows the beat lights; the right half (the time signature, e.g. `4/4`) opens its settings:
+
+- **Time signature**: 1–16 beats over a 2, 4, 8 or 16 note, or one of the common meters (2/4 … 12/8). The time signature is the pattern's bar length, so changing it resizes the drum pattern (each bar keeps its steps from the start; undo restores it).
+- **Beats**: tap a beat to cycle accent → click → silent, or use *Every beat*, *Beat 1 only* or *Backbeat*. The choices are kept per beat and persist with the session.
+
+The click works independently of sequence playback, shares the BPM and is scheduled on the audio clock. Swing affects drum steps, not the reference click. Stopping or pausing the sequence leaves the metronome running; turn its own control off to silence it.
 
 ## Sound design
 
-All 50 factory percussion sounds are parameter presets for three reusable Web Audio engines:
+The synthesizer follows the voice structure of Arturia Pigments — two engine slots, two filters with a series↔parallel blend, an amp and effects — with modulation assigned by arming a source and dragging knob rings. It is modelled on that workflow, not an emulation of Pigments.
 
-- Subtractive: dual oscillators, noise, pitch/amplitude/filter envelopes, multimode filter, two LFOs, and modulation.
-- FM: four operators, per-operator envelopes, ratios, fine tuning and feedback, plus six algorithms.
-- Additive: multiple editable partials, independent decay/detune, spectral tilt, spread, and inharmonicity.
+```text
+Engine 1 ─┬─(To filter)─▶ Filter 1 ─┬─(series)──▶ Filter 2 ─┐
+          │                         └─(parallel)───────────┼─▶ Amp ─▶ FX inserts ─▶ out
+Engine 2 ─┴─(To filter)─────────────────────────▶ Filter 2 ─┘            └─▶ delay / reverb sends
+   └── Combine with Engine 1: Layer (+), FM (Engine 2 bends Engine 1's pitch) or Ring (Engine 1 × Engine 2)
+```
 
-The compact effects stage provides drive, bit crushing, compression, delay, and reverb routing. Factory sounds and kits are deeply frozen. Editing a factory sound creates a temporary session override until **Save as new** or **Duplicate** is chosen, so factory content is never overwritten.
+The **Synth** view shows this path as a diagram. Each block is clickable and opens its editor underneath; arrows are weighted by how much signal takes each path, the series/parallel link redraws as the routing changes, and each hit lights the stages in order. On phones the diagram runs top to bottom.
 
-The sound-design workspace takes its visual organization from modular software synthesizers such as Pigments: source selection, a rendered output waveform, an explicit signal path, detailed engine modules, envelope curves, and a modulation-source strip. This is not a Pigments emulation. Each pad uses **one active engine**, not three layers. Switching engines keeps the inactive patches as editable drafts; switching back recalls them. Saved custom presets include those drafts.
+- **Engines**: each slot runs one of three engines — *Analog* (two oscillators + noise), *FM* (four operators, six algorithms) or *Harmonic* (additive partials with tilt, spread and inharmonicity). Every engine has its own amp envelope, pitch sweep, level and *To filter* balance between Filter 1 and Filter 2. Switching a slot's type keeps the edits for each type. Engine 2 is off until you turn it on.
+- **Combine**: *Layer* sums both engines; *FM* feeds Engine 2 into Engine 1's oscillator frequencies at audio rate (depth scales with each oscillator's pitch); *Ring* multiplies them, with an amount that blends from dry Engine 1 to fully ringed.
+- **Filters**: two multimode filters (low-pass, high-pass, band-pass, notch), each with cutoff, resonance, envelope amount and key tracking, plus a shared filter envelope. The response curves are measured from a real `BiquadFilterNode`.
+- **Amp**: level, pan and velocity sensitivity, with both engine envelopes drawn on one time axis.
+- **FX**: drive, bit crush and compression as an ordered insert chain, then delay and reverb sends with a Color low-pass.
 
-Subtractive oscillators have waveform displays; the FM diagrams and audio graph share the same algorithm definitions; additive partial bars are directly editable. The output preview runs through the real voice/effects graph and refreshes after edits. Noise and random modulation mean the preview represents the patch rather than an identical sample for every hit. Changes are heard on the next hit, including hits from an already-running sequence.
+**Modulation** sources — LFO 1, LFO 2, the filter envelope, Engine 1's envelope, velocity and random-per-hit — sit in the strip at the bottom. Pick a source and every knob it can reach gets a dashed orange ring; drag a knob to set that source's depth (up is positive, down negative; double-click clears it). The source panel lists everything it moves, with sliders and an *Add a target* menu for destinations without a knob. Knobs show small source tags when modulated.
 
-The modulation matrix accepts LFO, envelope, velocity and random-per-trigger routes, with engine-dependent destinations. FM operator tuning and full ADSR controls expand within each operator. Effect Mix is dry/wet for drive, amplitude-quantizing bit crush, and compression; delay/reverb use shared sends with a Color low-pass control. Pad naming, tuning, mute, ordering, and kit/backup tools are available in **Synthesizer → Library**.
+The **output scope** is an oscilloscope line of the rendered patch through the real voice and effects graph: *Wave* shows about six cycles of the pitch, *20 ms*/*100 ms* the attack, *Hit* the whole sound. It starts at the sound's onset. Noise and random modulation mean the preview represents the patch rather than an identical sample for every hit. Changes are heard on the next hit, including hits from an already-running sequence.
+
+The **Pad** and **Preset** menus are searchable: type to filter by name, category, tag or engine, use the arrow keys and Enter. There are 54 factory sounds: 50 single-engine percussion sounds and four two-engine demonstrations — *Layer Snare* (tone + noise through parallel filters), *Knock Kick* (Analog body + FM click), *Ring Clang* (ring modulation) and *Growl Tom* (engine FM). Factory sounds and kits are deeply frozen. Editing a factory sound creates a temporary session override until **Save as new** or **Duplicate** is chosen, so factory content is never overwritten. Presets saved before the two-engine voice are migrated when loaded: the old engine becomes Engine 1, its filter becomes Filter 1 and LFO routings become modulation routes, so they sound the same. Pad naming, tuning, mute, ordering, and kit/backup tools are available in **Synthesizer → Library**.
 
 ## Drum Machine and training
 
-The look-ahead scheduler places events on the Web Audio clock instead of relying on timer callbacks for note timing. Patterns support 1–4 bars, adjustable tempo and swing, loop playback, metronome, undo/redo, bar duplication, live editing, and per-step velocity, accent, probability, and microtiming. Pad hits can be overdubbed into the active loop with quantization enabled or disabled.
+The look-ahead scheduler places events on the Web Audio clock instead of relying on timer callbacks for note timing. Patterns support 1–4 bars in any meter set from the metronome, adjustable tempo and swing, loop playback, undo/redo, bar duplication, live editing, and per-step velocity, accent, probability, and microtiming (selecting an active step opens its editor).
 
-The rhythm library includes fundamentals, grooves, odd meters, compound meters, Latin/Afro-Cuban concepts, and polyrhythms. Exercises are definitions interpreted by one generic training engine—not individual hard-coded screens. Starting an exercise configures the real shared kit, rhythm, BPM, metronome, and transport, then sends the player to the real pad surface. Scoring reports timing error, consistency, early/late bias, misses, extras, and incorrect pads. Exercise attempts remain local.
+Lanes can be folded. A folded lane is a thin strip that shows its hits as ticks and flashes whenever the pad plays, from the sequence or live. When a pattern loads, empty lanes start folded; the chevron on a lane name folds or opens it, and **Fold empty** / **Show all** switch every lane at once.
+
+The rhythm library includes fundamentals, grooves, odd meters, compound meters, Latin/Afro-Cuban concepts, and polyrhythms. The training browser contains 100 exercises across 14 skill areas and five difficulty levels. Search, faceted filters (focus, level, meter, pad count, style, backing, and progress), favourites, progress-aware sorting, and recent/best scores make the library manageable on a phone.
+
+Exercises are definitions interpreted by one generic training engine—not individual hard-coded screens. Each definition carries its meter, tempo range, target pads and notes, instructions, difficulty, style, optional drum-machine backing, and scoring setup. Before starting, choose tempo, duration (30 seconds through 10 minutes or unlimited), compatible backing groove, count-in, click, guide mode, and relaxed/normal/strict timing tolerance. **Listen** demonstrates the target without scoring. **Start practice** configures the real shared kit, rhythm, BPM, metronome, and transport, then sends the player to the real pad surface with notation, instructions, countdown, live timing feedback, and highlighted target pads.
+
+The results view reports score and grade, timing accuracy, consistency, early/late bias, misses, extras, wrong pads, streak, per-bar drift, timing distribution, and concise practice advice. Exercise history, best scores, calibration offset, favourites, browser state, and session preferences remain local in IndexedDB.
 
 ## Offline installation
 
@@ -105,14 +125,14 @@ No backend, account, analytics service, or network audio asset is required.
 
 ```text
 src/
-  audio/          Web Audio graph and subtractive/FM/additive voices
-  model/          Serializable domain models and immutable clone helpers
+  audio/          Web Audio graph, two-engine voices and waveform/scope rendering
+  model/          Serializable domain models, the voice definition and preset migration
   persistence/    IndexedDB stores and JSON import/export
   presets/        Factory sounds, kits, and rhythm definitions
   state/           Shared app state and application-level transport ownership
   training/        Exercise generation, validation, progression, and scoring
   transport/       Look-ahead scheduler, sequencing, swing, and quantization
-  ui/              Pads, Synth, Drum Machine, Exercises, Song placeholder
+  ui/              Pads, Synth (flow, engines, modules, modulation), Drum Machine, Exercises, Song placeholder
 public/
   manifest.webmanifest
   sw.js
@@ -122,7 +142,7 @@ tests/
   core.test.ts
 ```
 
-`AudioEngine` is UI-independent and keeps one protected master graph. `TransportService` is created once by the application provider, so routing between screens cannot interrupt playback. UI state resolves sound IDs against immutable factory presets, user presets, and temporary overrides in that order.
+`AudioEngine` is UI-independent and keeps one protected master graph. `src/model/voice.ts` defines the voice shared by the audio graph, the flow diagram and the editors. `TransportService` is created once by the application provider, so routing between screens cannot interrupt playback. UI state resolves sound IDs against immutable factory presets, user presets, and temporary overrides in that order.
 
 ## PWA/offline release checklist
 
