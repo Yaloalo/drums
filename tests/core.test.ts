@@ -1,11 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cloneKit, clonePreset, FACTORY_KITS, FACTORY_PRESETS } from '../src/presets/factorySounds.ts';
+import {
+  cloneKit,
+  clonePreset,
+  FACTORY_KITS,
+  FACTORY_PRESETS,
+} from '../src/presets/factorySounds.ts';
 import { RHYTHM_PRESETS } from '../src/presets/rhythms.ts';
 import { EXERCISES, validateExercise } from '../src/training/exercises.ts';
 import { scorePerformance } from '../src/training/scoring.ts';
-import { createPattern, nearestStep, quantizeHit, resizePattern, secondsPerStep, stepTime, swingOffset } from '../src/transport/timing.ts';
-import { parseUserData, serializeUserData, type UserDataBundle } from '../src/persistence/database.ts';
+import {
+  createPattern,
+  nearestStep,
+  quantizeHit,
+  resizePattern,
+  secondsPerStep,
+  stepTime,
+  swingOffset,
+} from '../src/transport/timing.ts';
+import {
+  parseUserData,
+  serializeUserData,
+  type UserDataBundle,
+} from '../src/persistence/database.ts';
+import { waveformPath } from '../src/audio/waveform.ts';
 
 void test('timing uses Web Audio-compatible absolute step positions', () => {
   assert.equal(secondsPerStep(120, 16), 0.125);
@@ -35,9 +53,18 @@ void test('patterns resize without sharing mutable step data', () => {
 
 void test('performance scoring reports accurate timing and bias', () => {
   const result = scorePerformance({
-    exerciseId: 'pulse', toleranceMs: 80,
-    expected: [{ time: 1, padIndex: 1 }, { time: 2, padIndex: 1 }, { time: 3, padIndex: 1 }],
-    actual: [{ time: .99, padIndex: 1, velocity: .9 }, { time: 1.99, padIndex: 1, velocity: .9 }, { time: 2.99, padIndex: 1, velocity: .9 }],
+    exerciseId: 'pulse',
+    toleranceMs: 80,
+    expected: [
+      { time: 1, padIndex: 1 },
+      { time: 2, padIndex: 1 },
+      { time: 3, padIndex: 1 },
+    ],
+    actual: [
+      { time: 0.99, padIndex: 1, velocity: 0.9 },
+      { time: 1.99, padIndex: 1, velocity: 0.9 },
+      { time: 2.99, padIndex: 1, velocity: 0.9 },
+    ],
   });
   assert.ok(result.score >= 90);
   assert.equal(result.missed, 0);
@@ -47,9 +74,16 @@ void test('performance scoring reports accurate timing and bias', () => {
 
 void test('scoring distinguishes misses, extra hits and wrong pads', () => {
   const result = scorePerformance({
-    exerciseId: 'coordination', toleranceMs: 60,
-    expected: [{ time: 1, padIndex: 0 }, { time: 2, padIndex: 1 }],
-    actual: [{ time: 1.01, padIndex: 2, velocity: .8 }, { time: 2.5, padIndex: 1, velocity: .8 }],
+    exerciseId: 'coordination',
+    toleranceMs: 60,
+    expected: [
+      { time: 1, padIndex: 0 },
+      { time: 2, padIndex: 1 },
+    ],
+    actual: [
+      { time: 1.01, padIndex: 2, velocity: 0.8 },
+      { time: 2.5, padIndex: 1, velocity: 0.8 },
+    ],
   });
   assert.equal(result.wrongPad, 1);
   assert.equal(result.missed, 1);
@@ -72,20 +106,49 @@ void test('factory presets and kits stay immutable while clones are editable', (
 void test('exercise library is substantial, data-driven and valid', () => {
   assert.ok(EXERCISES.length >= 100);
   assert.ok(new Set(EXERCISES.map((exercise) => exercise.category)).size >= 10);
-  for (const exercise of EXERCISES) assert.deepEqual(validateExercise(exercise), []);
+  for (const exercise of EXERCISES)
+    assert.deepEqual(validateExercise(exercise), []);
 });
 
 void test('rhythm library covers fundamental, groove, meter, Latin and polyrhythm concepts', () => {
   assert.ok(RHYTHM_PRESETS.length >= 20);
   const tags = new Set(RHYTHM_PRESETS.flatMap((rhythm) => rhythm.tags));
-  for (const tag of ['fundamentals', 'groove', '7/8', 'latin', 'polyrhythm']) assert.ok(tags.has(tag));
-  const clave = RHYTHM_PRESETS.find((rhythm) => rhythm.id === 'rhythm-clave-32');
+  for (const tag of ['fundamentals', 'groove', '7/8', 'latin', 'polyrhythm'])
+    assert.ok(tags.has(tag));
+  const clave = RHYTHM_PRESETS.find(
+    (rhythm) => rhythm.id === 'rhythm-clave-32',
+  );
   assert.equal(clave?.pattern.bars, 2);
-  assert.equal(clave?.pattern.tracks[13].steps.filter((step) => step.active).length, 5);
+  assert.equal(
+    clave?.pattern.tracks[13].steps.filter((step) => step.active).length,
+    5,
+  );
 });
 
 void test('user data export serialization round-trips', () => {
-  const bundle: UserDataBundle = { version: 1, exportedAt: '2026-09-24T00:00:00.000Z', customPresets: [], customKits: [], customPatterns: [], attempts: [], session: { bpm: 112 } };
+  const bundle: UserDataBundle = {
+    version: 1,
+    exportedAt: '2026-09-24T00:00:00.000Z',
+    customPresets: [],
+    customKits: [],
+    customPatterns: [],
+    attempts: [],
+    session: { bpm: 112 },
+  };
   assert.deepEqual(parseUserData(serializeUserData(bundle)), bundle);
   assert.throws(() => parseUserData('{"version":2}'));
+});
+
+void test('waveform buckets retain transients and stereo phase differences', () => {
+  const transient = new Float32Array(1600);
+  transient[4] = 1;
+  transient[5] = -1;
+  const signal = waveformPath([transient]);
+  assert.ok(signal.startsWith('M0.00,3.00'));
+  assert.ok(signal.includes('0.00,61.00'));
+  assert.equal(signal.includes('NaN'), false);
+  const opposite = Float32Array.from(transient, (value) => -value);
+  assert.equal(waveformPath([transient, opposite]), signal);
+  assert.equal(waveformPath([new Float32Array(1600)]), 'M0,32 L160,32');
+  assert.equal(waveformPath([]), '');
 });

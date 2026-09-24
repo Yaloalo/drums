@@ -1,40 +1,108 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
+import { AudioLines } from 'lucide-react';
 import { AppProvider, type Area, useApp } from '../state/AppContext';
 import { ExercisesScreen } from './ExercisesScreen';
 import { PadsScreen } from './PadsScreen';
 import { SequencerScreen } from './SequencerScreen';
 import { SongScreen } from './SongScreen';
 import { SynthScreen } from './SynthScreen';
+import { ThemeToggle } from './ThemeToggle';
 
 // Horizontal positions follow the physical pull: a left swipe reveals the
 // Sequencer from the right; a right swipe reveals Synth from the left.
-const coordinates: Record<Area, [number, number]> = { pads: [0, 0], exercises: [0, -1], synth: [-1, 0], sequencer: [1, 0], song: [0, 1] };
-const keyboard = ['1', '2', '3', '4', 'q', 'w', 'e', 'r', 'a', 's', 'd', 'f', 'z', 'x', 'c', 'v'];
+const coordinates: Record<Area, [number, number]> = {
+  pads: [0, 0],
+  exercises: [0, -1],
+  synth: [-1, 0],
+  sequencer: [1, 0],
+  song: [0, 1],
+};
+const keyboard = [
+  '1',
+  '2',
+  '3',
+  '4',
+  'q',
+  'w',
+  'e',
+  'r',
+  'a',
+  's',
+  'd',
+  'f',
+  'z',
+  'x',
+  'c',
+  'v',
+];
 
-export function InstrumentApp() { return <AppProvider><Workspace /></AppProvider>; }
+export function InstrumentApp() {
+  return (
+    <AppProvider>
+      <Workspace />
+    </AppProvider>
+  );
+}
 
 function Workspace() {
-  const { area, setArea, triggerPad, toggleTransport } = useApp();
-  const [transition, setTransition] = useState('from-center');
-  const pointer = useRef<{ id: number; x: number; y: number; time: number } | null>(null);
+  const { area, setArea, triggerPad, toggleTransport, transport } = useApp();
+  const pointer = useRef<{
+    id: number;
+    x: number;
+    y: number;
+    time: number;
+  } | null>(null);
   const current = useRef(area);
+  const stage = useRef<HTMLDivElement>(null);
 
   const navigate = (next: Area) => {
     if (next === area) return;
-    const [fromX, fromY] = coordinates[area]; const [toX, toY] = coordinates[next];
-    setTransition(Math.abs(toX - fromX) > Math.abs(toY - fromY) ? (toX > fromX ? 'from-right' : 'from-left') : (toY > fromY ? 'from-bottom' : 'from-top'));
     setArea(next);
   };
-  useEffect(() => { current.current = area; }, [area]);
+  useLayoutEffect(() => {
+    if (
+      current.current !== area &&
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      const [fromX, fromY] = coordinates[current.current];
+      const [toX, toY] = coordinates[area];
+      const horizontal = Math.abs(toX - fromX) > Math.abs(toY - fromY);
+      const offset = horizontal
+        ? `translateX(${toX > fromX ? '' : '-'}18%)`
+        : `translateY(${toY > fromY ? '' : '-'}18%)`;
+      stage.current?.animate(
+        [
+          { transform: offset, opacity: 0.3 },
+          { transform: 'translate(0)', opacity: 1 },
+        ],
+        { duration: 240, easing: 'cubic-bezier(.2,.78,.2,1)' },
+      );
+    }
+    current.current = area;
+  }, [area]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat || ['INPUT', 'SELECT', 'TEXTAREA'].includes((event.target as HTMLElement)?.tagName)) return;
+      if (
+        event.repeat ||
+        ['INPUT', 'SELECT', 'TEXTAREA'].includes(
+          (event.target as HTMLElement)?.tagName,
+        )
+      )
+        return;
       const index = keyboard.indexOf(event.key.toLowerCase());
-      if (index >= 0) { event.preventDefault(); triggerPad(index); }
-      if (event.code === 'Space') { event.preventDefault(); toggleTransport(); }
+      if (index >= 0) {
+        event.preventDefault();
+        triggerPad(index);
+      }
+      if (event.code === 'Space') {
+        if ((event.target as HTMLElement)?.closest('button, [role="button"]'))
+          return;
+        event.preventDefault();
+        toggleTransport();
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -42,14 +110,27 @@ function Workspace() {
 
   const pointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
-    if (target.closest('button, input, select, textarea, [data-gesture-lock]')) return;
-    pointer.current = { id: event.pointerId, x: event.clientX, y: event.clientY, time: performance.now() };
+    if (
+      !event.isPrimary ||
+      target.closest('button, input, select, textarea, [data-gesture-lock]')
+    ) {
+      pointer.current = null;
+      return;
+    }
+    pointer.current = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      time: performance.now(),
+    };
   };
   const pointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
     const start = pointer.current;
     if (!start || start.id !== event.pointerId) return;
     pointer.current = null;
-    const dx = event.clientX - start.x; const dy = event.clientY - start.y; const elapsed = performance.now() - start.time;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    const elapsed = performance.now() - start.time;
     if (elapsed > 800 || Math.max(Math.abs(dx), Math.abs(dy)) < 68) return;
     const horizontal = Math.abs(dx) > Math.abs(dy) * 1.25;
     const vertical = Math.abs(dy) > Math.abs(dx) * 1.25;
@@ -64,14 +145,39 @@ function Workspace() {
     else if (area === 'sequencer' && horizontal && dx > 0) navigate('pads');
   };
 
-  return <div className="spatial-workspace" onPointerDown={pointerDown} onPointerUp={pointerUp} onPointerCancel={() => { pointer.current = null; }}>
-    <div className={`area-stage ${transition}`} key={area}>
-      {area === 'pads' && <PadsScreen />}
-      {area === 'synth' && <SynthScreen />}
-      {area === 'sequencer' && <SequencerScreen />}
-      {area === 'exercises' && <ExercisesScreen />}
-      {area === 'song' && <SongScreen />}
+  return (
+    <div
+      className="spatial-workspace"
+      onPointerDown={pointerDown}
+      onPointerUp={pointerUp}
+      onPointerCancel={() => {
+        pointer.current = null;
+      }}
+    >
+      <header className="app-header">
+        <button
+          className="brand"
+          onClick={() => setArea('pads')}
+          aria-label="Pulse Foundry · return to pads"
+        >
+          <AudioLines />
+          <span>
+            Pulse Foundry<small>RHYTHM INSTRUMENT</small>
+          </span>
+        </button>
+        <span className="workspace-status">
+          <i className={transport.playing ? 'running' : ''} />
+          {transport.playing ? 'Sequence playing' : 'Ready to play'}
+        </span>
+        <ThemeToggle />
+      </header>
+      <div className="area-stage" ref={stage} key={area}>
+        {area === 'pads' && <PadsScreen />}
+        {area === 'synth' && <SynthScreen />}
+        {area === 'sequencer' && <SequencerScreen />}
+        {area === 'exercises' && <ExercisesScreen />}
+        {area === 'song' && <SongScreen />}
+      </div>
     </div>
-    <div className="spatial-map" aria-hidden="true"><i className={area === 'exercises' ? 'active' : ''} /><i className={area === 'sequencer' ? 'active' : ''} /><i className={area === 'pads' ? 'active' : ''} /><i className={area === 'synth' ? 'active' : ''} /><i className={area === 'song' ? 'active' : ''} /></div>
-  </div>;
+  );
 }

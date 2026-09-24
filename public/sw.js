@@ -1,4 +1,4 @@
-const CACHE = 'pulse-foundry-v1';
+const CACHE = 'pulse-foundry-v2';
 const SHELL = ['/', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/icon.svg'];
 
 self.addEventListener('install', (event) => {

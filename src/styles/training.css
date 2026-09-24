@@ -1,0 +1,315 @@
+.exercises-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.training-header {
+  margin-bottom: 4px;
+}
+.training-header .back-control {
+  margin-left: auto;
+}
+.score-card {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  padding: 17px 20px;
+  border: 1px solid var(--accent-border);
+  border-left: 3px solid var(--accent);
+  border-radius: 5px;
+  background: var(--accent-light);
+}
+.score-ring {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+}
+.score-ring strong {
+  font-size: 22px;
+  font-weight: 650;
+}
+.score-ring span {
+  font-size: 8px;
+  color: var(--muted);
+  letter-spacing: 1px;
+}
+.score-card > div > span {
+  font-size: 9px;
+  color: var(--accent);
+  letter-spacing: 1px;
+}
+.score-card h2 {
+  margin: 5px 0;
+  font-size: 15px;
+}
+.score-card p {
+  font-size: 12px;
+}
+.training-layout {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  flex: 1;
+  min-height: 0;
+}
+.curriculum-rail,
+.exercise-browser,
+.exercise-detail {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+.curriculum-rail {
+  padding: 18px 12px;
+}
+.rail-label {
+  margin: 0 6px 14px;
+  font-size: 9px;
+}
+.curriculum-rail button {
+  width: 100%;
+  justify-content: flex-start;
+  border: 0;
+  border-left: 2px solid var(--line);
+  border-radius: 0;
+  padding: 8px;
+  text-align: left;
+  font-size: 11px;
+  color: var(--muted);
+}
+.curriculum-rail button i {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-style: normal;
+  font-size: 9px;
+}
+.curriculum-rail button.active {
+  color: var(--accent);
+  background: var(--accent-light);
+  border-left-color: var(--accent);
+}
+.curriculum-rail button.active i {
+  color: var(--tool-active-ink);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.exercise-browser {
+  display: flex;
+  flex-direction: column;
+}
+.category-chips {
+  display: flex;
+  gap: 6px;
+  padding: 12px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--line);
+}
+.category-chips button {
+  flex-shrink: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+.category-chips button.active {
+  color: var(--tool-active-ink);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.exercise-list {
+  overflow: auto;
+  padding: 10px;
+}
+.exercise-list > button {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  width: 100%;
+  padding: 13px 10px;
+  gap: 3px 10px;
+  border-color: transparent;
+  border-bottom-color: var(--line);
+  border-radius: 0;
+  text-align: left;
+}
+.exercise-list > button.active {
+  border-radius: 6px;
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+.exercise-number {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.exercise-number svg {
+  color: var(--green);
+}
+.exercise-list strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 650;
+}
+.exercise-list small {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 5px;
+}
+.exercise-list > button > i {
+  grid-column: 2;
+  font-size: 9px;
+  color: var(--muted);
+  font-style: normal;
+}
+.exercise-detail {
+  padding: 22px;
+}
+.exercise-detail h2 {
+  font-size: 24px;
+  line-height: 1.25;
+  letter-spacing: -0.5px;
+  margin: 10px 0 14px;
+}
+.exercise-detail > p {
+  font-size: 13px;
+}
+.exercise-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 20px 0;
+}
+.exercise-facts span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 5px 7px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.exercise-facts svg {
+  width: 13px;
+  height: 13px;
+  color: var(--accent);
+}
+.target-notation {
+  display: grid;
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  gap: 4px;
+  align-items: center;
+  height: 52px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+}
+.target-notation i {
+  height: 10px;
+  background: var(--line);
+  border-radius: 3px;
+}
+.target-notation i.beat {
+  height: 18px;
+}
+.target-notation i.hit {
+  height: 32px;
+  background: var(--accent);
+}
+.target-notation i.hit.beat {
+  background: var(--chord);
+}
+.exercise-setup {
+  margin-top: 22px;
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+.exercise-setup h3 {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 1px;
+}
+.exercise-setup ul {
+  color: var(--muted);
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.9;
+}
+.exercise-detail blockquote {
+  margin: 18px 0;
+  border: 1px solid var(--accent-border);
+  border-left: 3px solid var(--accent);
+  border-radius: 5px;
+  padding: 12px 14px;
+  background: var(--accent-light);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.75;
+}
+.start-exercise {
+  width: 100%;
+  min-height: 44px;
+  font-size: 11px;
+  font-weight: 650;
+}
+@media (max-width: 1100px) {
+  .training-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .curriculum-rail {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  .training-header h1 {
+    font-size: 26px;
+  }
+  .training-layout {
+    display: flex;
+    flex-direction: column;
+    flex: initial;
+    min-height: initial;
+  }
+  .exercise-browser {
+    flex-shrink: 0;
+    max-height: 255px;
+  }
+  .exercise-detail {
+    flex-shrink: 0;
+    overflow: visible;
+    padding: 18px;
+  }
+  .exercise-detail h2 {
+    font-size: 22px;
+  }
+  .score-card {
+    padding: 12px;
+    gap: 12px;
+  }
+  .score-card h2 {
+    font-size: 13px;
+  }
+  .score-card p {
+    font-size: 11px;
+  }
+}

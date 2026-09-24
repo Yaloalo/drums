@@ -1,0 +1,351 @@
+.sequencer-screen {
+  --rail: 150px;
+  --step-min: 34px;
+  --row-h: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.machine-header {
+  margin-bottom: 6px;
+}
+.machine-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.7fr) minmax(120px, 0.6fr);
+  gap: 18px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+.machine-meta label {
+  min-width: 0;
+}
+.machine-meta label > span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.8px;
+}
+.machine-meta [data-slot='native-select-wrapper'] {
+  width: 100%;
+}
+.machine-meta .swing {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.sequence-scroll {
+  flex: 1;
+  min-height: 180px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+.step-ruler,
+.track-row {
+  display: grid;
+  grid-template-columns: var(--rail) repeat(
+      var(--steps),
+      minmax(var(--step-min), 1fr)
+    );
+  gap: 4px;
+  min-width: max-content;
+}
+.step-ruler {
+  position: sticky;
+  top: -12px;
+  z-index: 5;
+  height: 32px;
+  background: var(--surface);
+}
+.step-ruler i {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-style: normal;
+  font-size: 10px;
+}
+.step-ruler i.beat {
+  color: var(--ink);
+  font-weight: 650;
+}
+.track-spacer {
+  position: sticky;
+  left: -12px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  background: var(--surface);
+  padding-left: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+.track-row {
+  min-height: var(--row-h);
+  margin-bottom: 5px;
+}
+.track-label {
+  position: sticky;
+  left: -12px;
+  z-index: 3;
+  min-width: 0;
+  min-height: var(--row-h);
+  border-color: transparent;
+  border-radius: 4px;
+  background: var(--rail-bg);
+  padding: 0 12px;
+  justify-content: flex-start;
+  text-align: left;
+  font-size: 11px;
+}
+.track-label > i {
+  display: none;
+}
+.track-label span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.track-label small {
+  margin-left: 8px;
+  font-size: 9px;
+  color: var(--muted);
+}
+.step-cell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  min-height: var(--row-h);
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--pad-off);
+  color: var(--muted);
+  touch-action: none;
+  overflow: hidden;
+}
+.step-cell.beat-start {
+  border-left: 2px solid var(--muted);
+}
+.step-cell span {
+  position: relative;
+  width: 4px;
+  height: 4px;
+  background: currentColor;
+  border-radius: 50%;
+  opacity: 0.35;
+}
+/* Fill, border and mark shape communicate velocity even without colour. */
+.step-cell.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--surface-subtle);
+}
+.step-cell.active::before {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: var(--fill, 52%);
+  background: currentColor;
+  opacity: 0.18;
+}
+.step-cell.active span {
+  width: 13px;
+  height: 13px;
+  opacity: 1;
+}
+.step-cell.soft {
+  border-style: dashed;
+}
+.step-cell.soft span {
+  width: 11px;
+  height: 11px;
+  border: 1px solid currentColor;
+  background: transparent;
+}
+.step-cell.accent {
+  color: var(--chord);
+  border: 2px solid var(--chord);
+  box-shadow: inset 0 3px 0 var(--chord);
+}
+.step-cell.playhead {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.step-cell.selected {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+.machine-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.machine-tools > label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 10px;
+}
+.machine-tools > label > svg {
+  width: 14px;
+}
+.machine-tools button {
+  font-size: 11px;
+}
+.step-inspector {
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+.step-inspector header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.step-inspector header span {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--accent);
+}
+.step-inspector header strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+.step-inspector header button {
+  font-size: 20px;
+  padding: 4px 10px;
+}
+.step-params {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 20px;
+  margin-top: 12px;
+}
+.step-params > label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 0 8px;
+  align-items: center;
+}
+.step-params label > span {
+  grid-column: 1 / -1;
+  font-size: 9px;
+  letter-spacing: 0.7px;
+  color: var(--muted);
+}
+.step-params output {
+  color: var(--accent);
+  text-align: right;
+  font-size: 11px;
+}
+.accent-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--chord);
+  font-size: 10px;
+}
+.step-empty {
+  color: var(--muted);
+  text-align: center;
+  font-size: 12px;
+  padding: 3px;
+}
+@media (pointer: coarse), (max-width: 1100px) {
+  .sequencer-screen {
+    --step-min: 44px;
+    --row-h: 44px;
+  }
+}
+@media (max-width: 700px) {
+  .machine-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    align-items: center;
+  }
+  .machine-header .screen-title {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .machine-header .back-control {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .machine-header .transport-bar {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    margin-top: 8px;
+  }
+}
+.machine-tools [data-slot='native-select-wrapper'] {
+  min-width: 64px;
+}
+@media (max-width: 600px) {
+  .sequencer-screen {
+    --rail: 94px;
+    --step-min: 42px;
+    gap: 12px;
+  }
+  .machine-header .screen-title h1 {
+    font-size: 24px;
+  }
+  .machine-meta {
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 10px;
+    padding: 12px;
+  }
+  .machine-meta select {
+    font-size: 11px;
+  }
+  .machine-meta .swing {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 90px 1fr;
+    align-items: center;
+  }
+  .machine-meta .swing > span {
+    margin: 0;
+  }
+  .sequence-scroll {
+    padding: 8px;
+  }
+  .step-ruler {
+    top: -8px;
+  }
+  .track-label,
+  .track-spacer {
+    left: -8px;
+  }
+  .track-label {
+    font-size: 10px;
+    padding-inline: 6px;
+  }
+  .machine-tools {
+    gap: 5px;
+  }
+  .machine-tools button {
+    padding-inline: 8px;
+    font-size: 10px;
+  }
+  .machine-tools > label {
+    margin-left: 0;
+  }
+  .step-params {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .step-inspector {
+    padding: 12px;
+  }
+}

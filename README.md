@@ -39,6 +39,14 @@ Z X C V
 
 Space toggles the global transport.
 
+## Visual system and waveform pads
+
+The interface follows `style.md` and the supplied reference captures: turquoise for selection and interaction, burnt orange for accents, flat bordered surfaces, and the same light/dark colour tokens, typography, and corner sizes. The theme follows the system when the app opens; the header toggle switches it for the current session.
+
+The 4×4 pads remain square at phone and desktop sizes. Each pad contains a waveform generated with `OfflineAudioContext` through the same subtractive, FM, or additive voice and effects graph used for playback. Preview rendering is queued and cached separately from live audio. Synth edits, preset assignments, and pad tuning invalidate the corresponding preview. Noise-based previews represent the patch rather than the exact random samples of every subsequent hit. Live and sequencer hits illuminate the pad and animate its waveform playhead; reduced-motion settings disable that movement.
+
+Shared tokens and controls live in `app/globals.css`; feature styles are separated under `src/styles/`. Sequencer velocity has redundant visual cues: soft hits use a dashed border and ring, normal hits a turquoise dot and half fill, and accents an orange dot, full fill, and heavier border.
+
 The screens form one spatial workspace:
 
 - Swipe left on Pads to pull the Drum Machine in from the right; swipe right to return.

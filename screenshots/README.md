@@ -15,6 +15,18 @@ Suggested naming, so a folder full of them still reads:
                                  sequencer-pad-velocities.png
 ```
 
+## What is here right now
+
+A set captured from the production build, as a baseline to compare against:
+
+| Files                                             | What they show                                                                                                                             |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `<area>-light-1440.png`, `<area>-dark-1440.png`   | Every main area at desktop width in both themes — `home`, `fundamentals`, `drums`, `piano`, `chords`, `circle`, `programs`, `ear`, `tuner` |
+| `<area>-light-390.png`                            | The same areas at phone width                                                                                                              |
+| `fundamentals-full-1440.png`                      | The whole theory article in one strip, top to bottom                                                                                       |
+| `sequencer-pad-velocities-light.png`, `-dark.png` | The four pad states side by side: off, ghost (dashed + ring), normal (teal), accent (orange) — the pattern `style.md` §5.6 describes       |
+| `scale-builder-5-notes.png`, `-7-`, `-12-`        | The article's scale builder at its three landmarks                                                                                         |
+
 ## Capturing one
 
 The QA scripts already drive a real browser. `scripts/qa-browser.mjs` renders the visual

@@ -108,7 +108,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const currentKit = kitRef.current;
       const pad = currentKit.pads.find((item) => item.id === padId);
       if (!pad || pad.muted) return;
-      audioEngine.trigger(resolvePreset(pad.presetId, customPresetsRef.current, overridesRef.current), { time, velocity, volume: pad.volume, pan: pad.pan, tune: pad.tune });
+      audioEngine.trigger(resolvePreset(pad.presetId, customPresetsRef.current, overridesRef.current), { padId: pad.id, time, velocity, volume: pad.volume, pan: pad.pan, tune: pad.tune });
     },
   ), []);
   /* oxlint-enable react/react-compiler */
@@ -142,7 +142,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const setArea = useCallback((next: Area) => setAreaState(next), []);
   const selectedPreset = resolvePreset(kit.pads[selectedPadIndex]?.presetId, customPresets, sessionOverrides);
   const kits = [...FACTORY_KITS, ...customKits];
-  const presets = [...FACTORY_PRESETS, ...customPresets];
+  const presets = [...FACTORY_PRESETS, ...customPresets].map((preset) => sessionOverrides[preset.id] ?? preset);
 
   const pushPattern = useCallback((next: Pattern) => {
     undoStack.current.push(cloneSerializable(patternRef.current));
@@ -156,7 +156,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!pad || pad.muted) return;
     void audioEngine.initialize().then(() => {
       const hitTime = audioEngine.currentTime;
-      audioEngine.trigger(resolvePreset(pad.presetId, customPresetsRef.current, overridesRef.current), { velocity, volume: pad.volume, pan: pad.pan, tune: pad.tune });
+      audioEngine.trigger(resolvePreset(pad.presetId, customPresetsRef.current, overridesRef.current), { padId: pad.id, velocity, volume: pad.volume, pan: pad.pan, tune: pad.tune });
       setActiveExercise((current) => current ? { ...current, hits: [...current.hits, { padIndex: index, time: hitTime, velocity }] } : current);
       const currentTransport = transportService.snapshot;
       if (currentTransport.recording && currentTransport.playing) {

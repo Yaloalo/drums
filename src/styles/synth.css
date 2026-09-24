@@ -1,0 +1,457 @@
+.synth-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.synth-header {
+  margin-bottom: 8px;
+}
+.synth-header .screen-title h1 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audition-button {
+  background: var(--accent);
+  color: var(--tool-active-ink);
+  border-color: var(--accent);
+  min-width: 84px;
+  touch-action: none;
+}
+.audition-button:active {
+  background: var(--chord);
+  border-color: var(--chord);
+}
+.synth-engine-row {
+  display: flex;
+  gap: 6px;
+}
+.synth-engine-row button {
+  min-width: 120px;
+  font-size: 12px;
+  font-weight: 650;
+  border-radius: 6px;
+  color: var(--muted);
+}
+.synth-engine-row button i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.synth-engine-row button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--tool-active-ink);
+}
+.section-strip {
+  display: flex;
+  gap: 5px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+.section-strip button {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  text-transform: capitalize;
+}
+.section-strip button.active {
+  color: var(--accent);
+  background: var(--accent-light);
+  border-color: var(--accent);
+}
+.synth-workbench {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 3px;
+  margin: -3px;
+}
+.synth-panel-stack,
+.effect-rack,
+.library-panel {
+  display: grid;
+  gap: 22px;
+}
+.effect-rack {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.synth-panel {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.synth-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--line);
+}
+.synth-panel h2 {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 650;
+}
+.synth-panel > header span {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.8px;
+}
+.synth-panel-body {
+  padding: 18px 22px;
+}
+.knob-grid,
+.knob-grid.five {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  max-width: 650px;
+  padding-top: 16px;
+}
+.synth-knob {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 6px;
+  border-radius: 5px;
+}
+.synth-knob:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.knob-face {
+  position: relative;
+  display: block;
+  width: 52px;
+  aspect-ratio: 1;
+  border: 3px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface-raised);
+}
+.knob-face i {
+  position: absolute;
+  top: 6%;
+  left: 50%;
+  width: 2px;
+  height: 44%;
+  background: var(--accent);
+  transform: translateX(-50%) rotate(var(--turn));
+  transform-origin: 50% 100%;
+}
+.synth-knob b {
+  font-size: 10px;
+  font-weight: 550;
+  color: var(--muted);
+  letter-spacing: 0.3px;
+}
+.synth-knob output {
+  font-size: 12px;
+  font-weight: 650;
+}
+.synth-knob [data-slot='slider'] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+}
+.synth-knob [data-slot='slider'] > div {
+  height: 100%;
+}
+.operator-row,
+.partial-row,
+.mod-route {
+  display: grid;
+  grid-template-columns: 38px 120px repeat(4, minmax(65px, 1fr));
+  align-items: center;
+  gap: 18px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.operator-row:last-child,
+.partial-row:last-child,
+.mod-route:last-child {
+  border-bottom: 0;
+}
+.fm-op {
+  grid-template-columns: 38px repeat(5, minmax(60px, 1fr));
+}
+.partial-row {
+  grid-template-columns: 38px repeat(4, minmax(60px, 1fr));
+}
+.mod-route {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.mod-route:has(.route-arrow) {
+  grid-template-columns: minmax(100px, 1fr) 24px minmax(100px, 1fr) minmax(
+      100px,
+      1fr
+    );
+}
+.operator-id,
+.partial-row > span,
+.mod-route > span {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--accent);
+}
+.mini-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 8px;
+  align-items: center;
+  min-width: 0;
+}
+.mini-control > span {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 550;
+  letter-spacing: 0.4px;
+}
+.mini-control output {
+  font-size: 11px;
+  min-width: 26px;
+  text-align: right;
+}
+.operator-row [data-slot='native-select-wrapper'],
+.mod-route [data-slot='native-select-wrapper'] {
+  width: 100%;
+}
+.operator-row select,
+.mod-route select {
+  font-size: 12px;
+}
+.algorithm-picker {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+.algorithm-picker button {
+  display: flex;
+  flex-direction: column;
+  color: var(--muted);
+  font-size: 10px;
+}
+.algorithm-picker button span {
+  font-size: 13px;
+  letter-spacing: 2px;
+}
+.algorithm-picker button.active,
+.filter-mode button.active {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.filter-mode {
+  display: flex;
+  gap: 6px;
+}
+.filter-mode button {
+  text-transform: capitalize;
+  font-size: 12px;
+}
+.envelope-viz {
+  height: 120px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+.envelope-viz svg {
+  width: 100%;
+  height: 100%;
+}
+.envelope-viz polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.route-arrow {
+  text-align: center;
+}
+.effect-row {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  gap: 24px;
+}
+.preset-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+.preset-list button {
+  display: block;
+  min-width: 0;
+  padding: 12px;
+  text-align: left;
+  border-radius: 7px;
+}
+.preset-list button.active {
+  background: var(--accent-light);
+  border-color: var(--accent);
+}
+.preset-list span {
+  display: flex;
+  justify-content: space-between;
+  color: var(--accent);
+  font-size: 10px;
+}
+.preset-list span i {
+  color: var(--muted);
+  font-style: normal;
+}
+.preset-list strong {
+  display: block;
+  margin: 8px 0 5px;
+  font-weight: 650;
+  font-size: 13px;
+}
+.preset-list small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+}
+.library-search {
+  width: 100%;
+}
+.synth-footer {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.synth-footer > div > span {
+  display: block;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+.synth-footer strong {
+  font-size: 11px;
+  font-weight: 650;
+}
+.synth-footer button {
+  margin-left: auto;
+  color: var(--accent);
+}
+@media (max-width: 800px) {
+  .synth-panel > header,
+  .synth-panel-body {
+    padding: 14px;
+  }
+  .operator-row {
+    gap: 12px;
+    grid-template-columns: 32px repeat(4, minmax(0, 1fr));
+  }
+  .operator-row > [data-slot='native-select-wrapper'] {
+    grid-column: span 4;
+  }
+  .operator-row > .mini-control:first-of-type {
+    grid-column: 2;
+  }
+  .fm-op {
+    grid-template-columns: 32px repeat(3, minmax(0, 1fr));
+  }
+  .fm-op > .mini-control:nth-last-child(2) {
+    grid-column: 2;
+  }
+  .partial-row {
+    grid-template-columns: 24px repeat(2, minmax(0, 1fr));
+    gap: 8px 16px;
+  }
+  .partial-row > .mini-control:nth-last-child(2) {
+    grid-column: 2;
+  }
+  .mod-route,
+  .mod-route:has(.route-arrow) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .mod-route > span:first-child {
+    grid-column: 1 / -1;
+  }
+  .mod-route > .route-arrow {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  .synth-screen {
+    gap: 12px;
+  }
+  .synth-header h1 {
+    font-size: 22px;
+  }
+  .synth-header .screen-title > span {
+    font-size: 8px;
+    letter-spacing: 0.8px;
+  }
+  .audition-button {
+    min-width: 52px;
+    padding: 8px;
+    font-size: 11px;
+  }
+  .synth-engine-row button {
+    flex: 1;
+    min-width: 0;
+    font-size: 10px;
+    padding-inline: 8px;
+  }
+  .section-strip {
+    gap: 4px;
+  }
+  .section-strip button {
+    flex: 1;
+    font-size: 10px;
+    padding: 8px 6px;
+  }
+  .synth-panel > header span {
+    font-size: 8px;
+  }
+  .knob-grid {
+    gap: 6px;
+  }
+  .synth-knob {
+    padding: 4px 0;
+  }
+  .knob-face {
+    width: 44px;
+  }
+  .synth-knob b {
+    font-size: 9px;
+  }
+  .synth-knob output {
+    font-size: 10px;
+  }
+  .algorithm-picker {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .effect-rack {
+    grid-template-columns: 1fr;
+  }
+  .preset-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .preset-list span {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .synth-footer {
+    gap: 16px;
+  }
+  .synth-footer button {
+    font-size: 11px;
+  }
+}
