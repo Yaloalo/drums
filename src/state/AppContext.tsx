@@ -132,7 +132,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       else if (session?.area) setAreaState(session.area);
       setHydrated(true);
     }).catch(() => setHydrated(true));
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+    // Development uses stable /src URLs, which must never be put behind the
+    // production offline cache. The layout also removes legacy localhost
+    // registrations before the module graph starts.
+    if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator)
+      navigator.serviceWorker.register('/sw.js').catch(() => undefined);
   }, [transportService]);
 
   useEffect(() => {

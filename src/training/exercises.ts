@@ -52,6 +52,25 @@ export const LEVELS = [
   'Expert',
 ];
 
+/** Recommended path retained as a public curriculum API for saved/older clients. */
+export const PROGRESSION = [
+  'Pulse',
+  'Eighth-note subdivisions',
+  'Sixteenth-note subdivisions',
+  'Simple coordination',
+  'Rests',
+  'Accents',
+  'Syncopation',
+  'Groove construction',
+  'Triplets',
+  'Shuffle',
+  'Timing precision',
+  'Odd meters',
+  'Polyrhythm',
+  'Rhythmic memory',
+  'Advanced coordination',
+] as const;
+
 export const skillName = (skill: ExerciseSkill) =>
   SKILLS.find((item) => item.id === skill)?.name ?? skill;
 export const styleName = (style: ExerciseStyle) =>

@@ -4,6 +4,7 @@ import {
   describePart,
   EXERCISES,
   exerciseById,
+  PROGRESSION,
   SKILLS,
   stepsPerBarOf,
   validateExercise,
@@ -27,6 +28,7 @@ const padIds = Array.from({ length: 16 }, (_, i) => `pad-${i}`);
 const quarter = exerciseById('exercise-quarter-notes')!;
 
 void test('the exercise library is varied and every exercise is valid', () => {
+  assert.equal(PROGRESSION.length, 15, 'the public curriculum remains available');
   assert.ok(EXERCISES.length >= 100, `${EXERCISES.length} exercises`);
   assert.equal(
     new Set(EXERCISES.map((exercise) => exercise.id)).size,

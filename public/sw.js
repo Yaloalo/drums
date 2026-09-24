@@ -16,14 +16,27 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin || url.pathname.startsWith('/__debug')) return;
+  // Never cache Vite's mutable development modules. A cached component paired
+  // with a newer dependency can otherwise fail with missing named exports.
+  if (
+    url.pathname.startsWith('/src/') ||
+    url.pathname.startsWith('/@') ||
+    url.pathname.startsWith('/node_modules/.vite/') ||
+    url.searchParams.has('t')
+  ) return;
   if (request.mode === 'navigate') {
     event.respondWith(fetch(request).then((response) => {
       const copy = response.clone(); void caches.open(CACHE).then((cache) => cache.put('/', copy)); return response;
     }).catch(() => caches.match('/')));
     return;
   }
-  event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => {
+  const cacheFirst = PRECACHE.includes(url.pathname) || SHELL.includes(url.pathname);
+  if (cacheFirst) {
+    event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));
+    return;
+  }
+  event.respondWith(fetch(request).then((response) => {
     if (response.ok) { const copy = response.clone(); void caches.open(CACHE).then((cache) => cache.put(request, copy)); }
     return response;
-  })));
+  }).catch(() => caches.match(request)));
 });

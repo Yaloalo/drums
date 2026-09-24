@@ -36,7 +36,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){var d=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.dataset.theme=d?'dark':'light';document.documentElement.classList.toggle('dark',d);})();`,
+            __html: `(function(){var d=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.dataset.theme=d?'dark':'light';document.documentElement.classList.toggle('dark',d);var local=location.hostname==='localhost'||location.hostname==='127.0.0.1'||location.hostname==='[::1]';var marker='pulse-foundry-dev-cache-cleaned';if(local&&!sessionStorage.getItem(marker)&&'serviceWorker'in navigator&&'caches'in window){Promise.all([navigator.serviceWorker.getRegistrations(),caches.keys()]).then(function(result){var registrations=result[0];var keys=result[1].filter(function(key){return key.indexOf('pulse-foundry-')===0});if(!registrations.length&&!keys.length)return;sessionStorage.setItem(marker,'1');return Promise.all(registrations.map(function(registration){return registration.unregister()}).concat(keys.map(function(key){return caches.delete(key)}))).then(function(){location.reload()})}).catch(function(){})}})();`,
           }}
         />
       </head>
