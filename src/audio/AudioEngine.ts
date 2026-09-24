@@ -1,9 +1,5 @@
 import { FM_ALGORITHMS } from './synthTopology';
-import {
-  envelopeLength,
-  normalizePreset,
-  voiceLength,
-} from '../model/voice';
+import { envelopeLength, normalizePreset, voiceLength } from '../model/voice';
 import type {
   AdditivePatch,
   Envelope,
@@ -31,6 +27,7 @@ interface VoiceNodes {
   stopAt: number;
   modulationGain: AudioParam;
   pan: AudioParam;
+  effects: Partial<Record<'drive' | 'delay' | 'reverb', Target[]>>;
 }
 
 /** A modulation target and how far one unit of modulation moves it. */
@@ -234,6 +231,7 @@ export class AudioEngine {
    * Engine 1 ─┬─ level ─┬─(1 − mix)─▶ Filter 1 ─┬─(1 − routing)─▶ Filter 2 ─┐
    *           │         └─(mix)──────────────────┼───────────────▶ Filter 2 ─┼─▶ Amp ─▶ FX ─▶ out
    * Engine 2 ─┘ (layer, FM or ring into Engine 1) └─(routing)───────────────────┘
+   * Utility ───────── filtered mix ────────────────┘  + clean direct feed ─▶ Amp
    */
   private playVoice(
     preset: SynthPreset,
@@ -290,6 +288,49 @@ export class AudioEngine {
       return level;
     });
 
+    // The support layer is intentionally independent of both primary engine
+    // slots: it can reinforce a transient/noise band through the filters while
+    // preserving a clean sub through its direct feed.
+    const utilityPatch: SubtractivePatch | null = voice.utility?.enabled
+      ? {
+          engine: 'subtractive',
+          baseFrequency: voice.utility.baseFrequency,
+          oscillators: [
+            {
+              waveform: voice.utility.oscillator.waveform,
+              octave: voice.utility.oscillator.octave,
+              semitone: 0,
+              fine: 0,
+              level: voice.utility.oscillator.enabled
+                ? voice.utility.oscillator.level
+                : 0,
+              phase: 0,
+              retrigger: true,
+            },
+          ],
+          noise: {
+            level: voice.utility.noise.enabled ? voice.utility.noise.level : 0,
+            type: voice.utility.noise.type,
+          },
+          ampEnvelope: voice.utility.ampEnvelope,
+          pitchEnvelope: { amount: 0, decay: 0.05 },
+        }
+      : null;
+    const utilityEngine = utilityPatch
+      ? this.buildEngine(utilityPatch, time, 2 ** (tune / 12), chain)
+      : null;
+    const utilityLevel = utilityEngine ? gain(1) : null;
+    if (utilityEngine && utilityLevel) {
+      const direct = Math.max(0, Math.min(1, voice.utility.direct));
+      const mix = Math.max(0, Math.min(1, voice.utility.filterMix));
+      utilityEngine.output.connect(utilityLevel);
+      utilityLevel.connect(gain(direct)).connect(amp);
+      utilityLevel
+        .connect(gain((1 - direct) * (1 - mix)))
+        .connect(filterOne.input);
+      utilityLevel.connect(gain((1 - direct) * mix)).connect(filterTwo.input);
+    }
+
     const [one, two] = engines;
     const combine: Target[] = [];
     const amount = Math.max(0, Math.min(1, voice.combine.amount));
@@ -327,6 +368,8 @@ export class AudioEngine {
         pitch2: cents(two),
         engine1: level(levels[0]),
         engine2: level(levels[1]),
+        utility: level(utilityLevel),
+        utilityPitch: cents(utilityEngine),
         combine,
         cutoff: param(filterOne.frequency, 5000),
         resonance: param(filterOne.q, 8),
@@ -334,6 +377,7 @@ export class AudioEngine {
         resonance2: param(filterTwo.q, 8),
         fmIndex: [...(one?.fmIndex ?? []), ...(two?.fmIndex ?? [])],
         spectralTilt: [...(one?.tilt ?? []), ...(two?.tilt ?? [])],
+        ...chain.effects,
       },
       time,
       velocity,
@@ -373,7 +417,9 @@ export class AudioEngine {
       );
       filter.frequency.exponentialRampToValueAtTime(
         level(envelope.sustain),
-        time + Math.max(0.001, envelope.attack) + Math.max(0.005, envelope.decay),
+        time +
+          Math.max(0.001, envelope.attack) +
+          Math.max(0.005, envelope.decay),
       );
       filter.frequency.exponentialRampToValueAtTime(
         cutoff,
@@ -609,6 +655,7 @@ export class AudioEngine {
     output.connect(modulationGain);
     let tail: AudioNode = modulationGain;
     const nodes: AudioNode[] = [output, panner, modulationGain];
+    const effectTargets: VoiceNodes['effects'] = {};
     for (const effect of preset.effects.filter(
       (item) =>
         item.enabled && ['drive', 'bitcrush', 'compressor'].includes(item.type),
@@ -640,6 +687,8 @@ export class AudioEngine {
       const mix = context.createGain();
       dry.gain.value = 1 - effect.mix;
       wet.gain.value = effect.mix;
+      if (effect.type === 'drive')
+        effectTargets.drive = [{ param: wet.gain, scale: 0.65 }];
       tail.connect(dry).connect(mix);
       tail.connect(processor).connect(wet).connect(mix);
       tail = mix;
@@ -654,6 +703,7 @@ export class AudioEngine {
       const color = context.createBiquadFilter();
       color.frequency.value = 600 + delayDefinition.amount * 15000;
       send.gain.value = delayDefinition.mix;
+      effectTargets.delay = [{ param: send.gain, scale: 0.8 }];
       tail.connect(color).connect(send).connect(this.delay);
       nodes.push(send, color);
     }
@@ -665,6 +715,7 @@ export class AudioEngine {
       const color = context.createBiquadFilter();
       color.frequency.value = 600 + reverbDefinition.amount * 15000;
       send.gain.value = reverbDefinition.mix;
+      effectTargets.reverb = [{ param: send.gain, scale: 0.8 }];
       tail.connect(color).connect(send).connect(this.reverb);
       nodes.push(send, color);
     }
@@ -674,6 +725,7 @@ export class AudioEngine {
       stopAt: time + Math.min(6, Math.max(0.08, duration + 0.08)),
       modulationGain: modulationGain.gain,
       pan: panner.pan,
+      effects: effectTargets,
     };
   }
 
@@ -694,10 +746,7 @@ export class AudioEngine {
       Math.max(0.0001, safePeak * Math.max(0.0001, envelope.sustain)),
       time + envelope.attack + Math.max(0.005, envelope.decay),
     );
-    param.exponentialRampToValueAtTime(
-      0.0001,
-      time + envelopeLength(envelope),
-    );
+    param.exponentialRampToValueAtTime(0.0001, time + envelopeLength(envelope));
   }
 
   private attachModulation(
@@ -752,6 +801,12 @@ export class AudioEngine {
             ? filterEnvelope
             : engines[0].patch.ampEnvelope;
         this.scheduleEnvelope(source.offset, envelope, time, 1);
+      } else if (route.source.startsWith('macro')) {
+        const index = Number(route.source.slice(-1)) - 1;
+        source.offset.value = Math.max(
+          0,
+          Math.min(1, preset.macros[index]?.value ?? 0),
+        );
       } else {
         source.offset.value =
           route.source === 'random' ? Math.random() * 2 - 1 : velocity - 1;

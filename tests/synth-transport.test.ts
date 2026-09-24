@@ -6,10 +6,7 @@ import {
   nextClickLevel,
 } from '../src/transport/MetronomeClock.ts';
 import { FM_ALGORITHMS } from '../src/audio/synthTopology.ts';
-import {
-  FACTORY_KITS,
-  FACTORY_PRESETS,
-} from '../src/presets/factorySounds.ts';
+import { FACTORY_KITS, FACTORY_PRESETS } from '../src/presets/factorySounds.ts';
 import { RHYTHM_PRESETS } from '../src/presets/rhythms.ts';
 import {
   availableDestinations,
@@ -94,7 +91,9 @@ void test('meters set the bar length and keep each bar’s steps', () => {
   assert.equal(seven.stepsPerBar, 14);
   assert.equal(seven.tracks[0].steps.length, 28);
   assert.deepEqual(
-    seven.tracks[0].steps.flatMap((step, index) => (step.active ? [index] : [])),
+    seven.tracks[0].steps.flatMap((step, index) =>
+      step.active ? [index] : [],
+    ),
     [2, 14 + 4],
     'step 16 falls outside a 7/8 bar; bar 2 keeps its first beat',
   );
@@ -179,6 +178,9 @@ void test('legacy one-engine presets migrate without changing their sound', () =
   assert.equal(preset.modulation.length, 2, 'zero-depth LFOs add no route');
   assert.equal(one.drafts?.fm?.baseFrequency, 333);
   assert.deepEqual(one.drafts?.fm?.pitchEnvelope, { amount: 0, decay: 0.08 });
+  assert.equal(preset.voice.utility.enabled, false);
+  assert.equal(preset.macros.length, 4);
+  assert.ok(preset.macros.every((macro) => typeof macro.value === 'number'));
   assert.equal(normalizePreset(preset), preset, 'current presets pass through');
   assert.equal('engineType' in preset, false);
 });
@@ -199,6 +201,21 @@ void test('factory library is migrated, frozen and includes layered voices', () 
   assert.ok(Object.isFrozen(FACTORY_PRESETS[0].voice.engines[0].patch));
   const fm = FACTORY_PRESETS.find((p) => p.name === 'FM Bell')!;
   assert.equal(fm.voice.filters[0].enabled, false, 'FM sounds stay unfiltered');
+  assert.ok(availableDestinations(fm.voice, fm.effects).includes('reverb'));
+  assert.deepEqual(
+    FACTORY_PRESETS.filter((preset) => preset.voice.utility.enabled).map(
+      (preset) => preset.name,
+    ),
+    ['Deep 808', 'Chrome Snare'],
+  );
+  for (const preset of FACTORY_PRESETS) {
+    assert.equal(preset.macros.length, 4);
+    for (const source of ['macro1', 'macro2', 'macro3', 'macro4'] as const)
+      assert.ok(
+        preset.modulation.some((route) => route.source === source),
+        `${preset.name} has ${source}`,
+      );
+  }
 });
 
 void test('switching a slot’s engine recalls its edits and leaves the other slot alone', () => {
@@ -210,7 +227,10 @@ void test('switching a slot’s engine recalls its edits and leaves the other sl
   switched.voice.engines[0].patch.baseFrequency = 222;
   const back = selectSlotEngine(switched, 0, 'subtractive');
   assert.equal(back.voice.engines[0].patch.baseFrequency, 137);
-  assert.equal(selectSlotEngine(back, 0, 'fm').voice.engines[0].patch.baseFrequency, 222);
+  assert.equal(
+    selectSlotEngine(back, 0, 'fm').voice.engines[0].patch.baseFrequency,
+    222,
+  );
   assert.deepEqual(back.voice.engines[1], initial.voice.engines[1]);
   assert.notEqual(initial.voice.engines[0].patch.baseFrequency, 137);
   assert.deepEqual(back.effects, initial.effects);
@@ -232,6 +252,16 @@ void test('voice length and destinations follow the active engines', () => {
   assert.ok(Math.abs(voiceLength(preset.voice) - 0.152) < 1e-9);
   assert.equal(availableDestinations(preset.voice).includes('combine'), false);
   assert.equal(availableDestinations(preset.voice).includes('pitch2'), false);
+  preset.voice.utility.enabled = true;
+  preset.voice.utility.ampEnvelope = {
+    attack: 0.01,
+    decay: 1.2,
+    sustain: 0,
+    release: 0.1,
+  };
+  assert.ok(Math.abs(voiceLength(preset.voice) - 1.31) < 1e-9);
+  assert.ok(availableDestinations(preset.voice).includes('utility'));
+  assert.ok(availableDestinations(preset.voice).includes('utilityPitch'));
 });
 
 void test('every FM graph has valid operators and carriers, with no audio-rate graph cycles', () => {

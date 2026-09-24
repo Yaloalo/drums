@@ -2,6 +2,7 @@ import type {
   AdditivePatch,
   EngineSlot,
   Envelope,
+  EffectDefinition,
   FilterDefinition,
   FilterMode,
   FMPatch,
@@ -13,6 +14,7 @@ import type {
   SynthEngineType,
   SynthPatch,
   SynthPreset,
+  UtilitySource,
   VoiceArchitecture,
 } from './types.ts';
 import { cloneSerializable } from './types.ts';
@@ -162,6 +164,40 @@ export function defaultSlot(slot: number, enabled = false): EngineSlot {
   };
 }
 
+export function defaultUtility(): UtilitySource {
+  return {
+    enabled: false,
+    baseFrequency: 55,
+    oscillator: {
+      enabled: true,
+      waveform: 'sine',
+      octave: -1,
+      level: 0.45,
+    },
+    noise: { enabled: false, type: 'white', level: 0.25 },
+    ampEnvelope: env(0.001, 0.22, 0, 0.04),
+    filterMix: 0,
+    direct: 0.75,
+  };
+}
+
+const DEFAULT_MACROS = [
+  { name: 'Body', destination: 'cutoff', min: 0, max: 1, value: 0.5 },
+  { name: 'Motion', destination: 'pitch', min: 0, max: 1, value: 0 },
+  { name: 'Edge', destination: 'effects', min: 0, max: 1, value: 0 },
+  { name: 'Space', destination: 'reverb', min: 0, max: 1, value: 0 },
+];
+
+function normalizedMacros(
+  macros: SynthPreset['macros'],
+): SynthPreset['macros'] {
+  return DEFAULT_MACROS.map((fallback, index) => ({
+    ...fallback,
+    ...macros[index],
+    value: Math.max(0, Math.min(1, macros[index]?.value ?? fallback.value)),
+  }));
+}
+
 /** A one-engine patch without the parts that moved to the voice. */
 export function sourceFromLegacy(patch: LegacyPatch): SynthPatch {
   const copy = cloneSerializable(patch) as LegacyPatch;
@@ -205,6 +241,7 @@ function migrateLegacy(legacy: LegacySynthPreset): SynthPreset {
   delete (rest as Partial<LegacySynthPreset>).voice;
   return {
     ...cloneSerializable(rest),
+    macros: normalizedMacros(legacy.macros ?? []),
     modulation: [...cloneSerializable(legacy.modulation ?? []), ...lfoRoutes],
     voice: {
       engines: [
@@ -217,6 +254,7 @@ function migrateLegacy(legacy: LegacySynthPreset): SynthPreset {
         },
         defaultSlot(1),
       ],
+      utility: defaultUtility(),
       combine: { mode: 'layer', amount: 0.5 },
       filters: [filter, defaultFilter(false)],
       filterRouting: 1,
@@ -234,7 +272,18 @@ function migrateLegacy(legacy: LegacySynthPreset): SynthPreset {
 export function normalizePreset(
   preset: SynthPreset | LegacySynthPreset,
 ): SynthPreset {
-  if (preset.voice) return preset as SynthPreset;
+  if (preset.voice) {
+    const current = preset as SynthPreset;
+    const hasUtility = Boolean(current.voice.utility);
+    const hasMacros =
+      current.macros.length === 4 &&
+      current.macros.every((macro) => typeof macro.value === 'number');
+    if (hasUtility && hasMacros) return current;
+    const next = cloneSerializable(current);
+    next.voice.utility ??= defaultUtility();
+    next.macros = normalizedMacros(next.macros ?? []);
+    return next;
+  }
   return migrateLegacy(preset as LegacySynthPreset);
 }
 
@@ -255,6 +304,7 @@ export function voiceLength(voice: VoiceArchitecture): number {
     ...voice.engines
       .filter((slot) => slot.enabled)
       .map((slot) => envelopeLength(slot.patch.ampEnvelope)),
+    voice.utility?.enabled ? envelopeLength(voice.utility.ampEnvelope) : 0,
   );
 }
 
@@ -290,6 +340,10 @@ export const MODULATION_SOURCES = [
   'ampEnv',
   'velocity',
   'random',
+  'macro1',
+  'macro2',
+  'macro3',
+  'macro4',
 ] as const;
 
 export const SOURCE_NAMES: Record<ModulationRoute['source'], string> = {
@@ -299,6 +353,10 @@ export const SOURCE_NAMES: Record<ModulationRoute['source'], string> = {
   ampEnv: 'Engine 1 env',
   velocity: 'Velocity',
   random: 'Random',
+  macro1: 'Macro 1',
+  macro2: 'Macro 2',
+  macro3: 'Macro 3',
+  macro4: 'Macro 4',
 };
 
 export const SOURCE_TAGS: Record<ModulationRoute['source'], string> = {
@@ -308,6 +366,10 @@ export const SOURCE_TAGS: Record<ModulationRoute['source'], string> = {
   ampEnv: 'E1',
   velocity: 'VEL',
   random: 'RND',
+  macro1: 'M1',
+  macro2: 'M2',
+  macro3: 'M3',
+  macro4: 'M4',
 };
 
 export const DESTINATION_NAMES: Record<ModulationDestination, string> = {
@@ -319,6 +381,8 @@ export const DESTINATION_NAMES: Record<ModulationDestination, string> = {
   pan: 'Pan',
   engine1: 'Engine 1 level',
   engine2: 'Engine 2 level',
+  utility: 'Utility level',
+  utilityPitch: 'Utility pitch',
   combine: 'Combine amount',
   cutoff: 'Filter 1 cutoff',
   resonance: 'Filter 1 resonance',
@@ -326,11 +390,15 @@ export const DESTINATION_NAMES: Record<ModulationDestination, string> = {
   resonance2: 'Filter 2 resonance',
   fmIndex: 'FM index',
   spectralTilt: 'Harmonic tilt',
+  drive: 'Drive mix',
+  delay: 'Delay send',
+  reverb: 'Reverb send',
 };
 
 /** Destinations that do something for this voice right now. */
 export function availableDestinations(
   voice: VoiceArchitecture,
+  effects: EffectDefinition[] = [],
 ): ModulationDestination[] {
   const [one, two] = voice.engines;
   const engines = voice.engines.filter((slot) => slot.enabled);
@@ -338,11 +406,15 @@ export function availableDestinations(
   if (two.enabled) list.push('pitch2');
   list.push('amplitude', 'pan', 'engine1');
   if (two.enabled) list.push('engine2');
+  if (voice.utility?.enabled) list.push('utility', 'utilityPitch');
   if (two.enabled && voice.combine.mode !== 'layer') list.push('combine');
   if (voice.filters[0].enabled) list.push('cutoff', 'resonance');
   if (voice.filters[1].enabled) list.push('cutoff2', 'resonance2');
   if (engines.some((slot) => slot.patch.engine === 'fm')) list.push('fmIndex');
   if (engines.some((slot) => slot.patch.engine === 'additive'))
     list.push('spectralTilt');
+  for (const type of ['drive', 'delay', 'reverb'] as const)
+    if (effects.some((effect) => effect.type === type && effect.enabled))
+      list.push(type);
   return one.enabled ? list : list.filter((item) => item !== 'engine1');
 }

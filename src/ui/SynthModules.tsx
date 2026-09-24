@@ -8,6 +8,7 @@ import type {
   FilterDefinition,
   FilterMode,
   SynthPreset,
+  Waveform,
   VoiceArchitecture,
 } from '../model/types';
 import { ENGINE_NAMES } from '../model/voice';
@@ -199,6 +200,210 @@ function CombineDiagram({ mode }: { mode: CombineMode }) {
         OUT
       </text>
     </svg>
+  );
+}
+
+const UTILITY_WAVES: Exclude<Waveform, 'noise'>[] = [
+  'sine',
+  'triangle',
+  'sawtooth',
+  'square',
+];
+
+export function UtilityEditor({
+  preset,
+  updateVoice,
+}: {
+  preset: SynthPreset;
+  updateVoice: UpdateVoice;
+}) {
+  const { utility } = preset.voice;
+  return (
+    <div className="module-editor utility-editor">
+      <header className="module-header">
+        <div>
+          <span>UTILITY</span>
+          <h2>Sub weight + transient texture</h2>
+        </div>
+        <Switch
+          aria-label="Utility source on"
+          checked={utility.enabled}
+          onCheckedChange={(enabled) =>
+            updateVoice((voice) => {
+              voice.utility.enabled = enabled;
+            })
+          }
+        />
+      </header>
+      <p className="module-lede">
+        A support source that stays separate from both main engines. Blend a
+        clean sub directly into the amp or send oscillator and noise through the
+        two filters for extra body and attack.
+      </p>
+      <div className="utility-grid">
+        <Panel title="Utility oscillator" meta="SUB / BODY">
+          <div className="utility-source-head">
+            <Switch
+              aria-label="Utility oscillator on"
+              checked={utility.oscillator.enabled}
+              disabled={!utility.enabled}
+              onCheckedChange={(enabled) =>
+                updateVoice((voice) => {
+                  voice.utility.oscillator.enabled = enabled;
+                })
+              }
+            />
+            <Chips
+              ariaLabel="Utility oscillator waveform"
+              value={utility.oscillator.waveform}
+              options={UTILITY_WAVES.map((waveform) => ({
+                value: waveform,
+                label: waveform === 'sawtooth' ? 'Saw' : waveform,
+              }))}
+              onChange={(waveform) =>
+                updateVoice((voice) => {
+                  voice.utility.oscillator.waveform = waveform;
+                })
+              }
+            />
+          </div>
+          <div className="knob-row">
+            <Knob
+              label="PITCH"
+              value={utility.baseFrequency}
+              min={25}
+              max={4000}
+              step={1}
+              scale="log"
+              format={(value) => `${hz(value)} Hz`}
+              mod="utilityPitch"
+              disabled={!utility.enabled || !utility.oscillator.enabled}
+              onChange={(baseFrequency) =>
+                updateVoice((voice) => {
+                  voice.utility.baseFrequency = baseFrequency;
+                })
+              }
+            />
+            <Knob
+              label="OCTAVE"
+              value={utility.oscillator.octave}
+              min={-3}
+              max={3}
+              step={1}
+              disabled={!utility.enabled || !utility.oscillator.enabled}
+              onChange={(octave) =>
+                updateVoice((voice) => {
+                  voice.utility.oscillator.octave = octave;
+                })
+              }
+            />
+            <Knob
+              label="LEVEL"
+              value={utility.oscillator.level}
+              min={0}
+              max={1}
+              format={percent}
+              mod="utility"
+              disabled={!utility.enabled || !utility.oscillator.enabled}
+              onChange={(level) =>
+                updateVoice((voice) => {
+                  voice.utility.oscillator.level = level;
+                })
+              }
+            />
+          </div>
+        </Panel>
+        <Panel title="Noise source" meta="ATTACK / AIR">
+          <div className="utility-source-head">
+            <Switch
+              aria-label="Utility noise on"
+              checked={utility.noise.enabled}
+              disabled={!utility.enabled}
+              onCheckedChange={(enabled) =>
+                updateVoice((voice) => {
+                  voice.utility.noise.enabled = enabled;
+                })
+              }
+            />
+            <Chips
+              ariaLabel="Utility noise color"
+              value={utility.noise.type}
+              options={(['white', 'pink', 'metal'] as const).map((type) => ({
+                value: type,
+                label: type,
+              }))}
+              onChange={(type) =>
+                updateVoice((voice) => {
+                  voice.utility.noise.type = type;
+                })
+              }
+            />
+          </div>
+          <div className="knob-row">
+            <Knob
+              label="LEVEL"
+              value={utility.noise.level}
+              min={0}
+              max={1}
+              format={percent}
+              mod="utility"
+              disabled={!utility.enabled || !utility.noise.enabled}
+              onChange={(level) =>
+                updateVoice((voice) => {
+                  voice.utility.noise.level = level;
+                })
+              }
+            />
+          </div>
+        </Panel>
+        <Panel title="Routing" meta="FILTERED ↔ DIRECT">
+          <div className="knob-row">
+            <Knob
+              label="FILTER MIX"
+              value={utility.filterMix}
+              min={0}
+              max={1}
+              format={(value) =>
+                value < 0.02
+                  ? 'F1'
+                  : value > 0.98
+                    ? 'F2'
+                    : `${percent(value)} F2`
+              }
+              disabled={!utility.enabled}
+              onChange={(filterMix) =>
+                updateVoice((voice) => {
+                  voice.utility.filterMix = filterMix;
+                })
+              }
+            />
+            <Knob
+              label="DIRECT"
+              value={utility.direct}
+              min={0}
+              max={1}
+              format={percent}
+              disabled={!utility.enabled}
+              onChange={(direct) =>
+                updateVoice((voice) => {
+                  voice.utility.direct = direct;
+                })
+              }
+            />
+          </div>
+        </Panel>
+        <EnvelopePanel
+          title="Utility envelope"
+          meta="INDEPENDENT VCA"
+          envelope={utility.ampEnvelope}
+          onChange={(ampEnvelope) =>
+            updateVoice((voice) => {
+              voice.utility.ampEnvelope = ampEnvelope;
+            })
+          }
+        />
+      </div>
+    </div>
   );
 }
 
@@ -624,6 +829,15 @@ export function EffectsEditor({
             min={0}
             max={1}
             format={percent}
+            mod={
+              type === 'drive'
+                ? 'drive'
+                : type === 'delay'
+                  ? 'delay'
+                  : type === 'reverb'
+                    ? 'reverb'
+                    : undefined
+            }
             disabled={!current.enabled}
             onChange={(mix) => change(type, { mix })}
           />

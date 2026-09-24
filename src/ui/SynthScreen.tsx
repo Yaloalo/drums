@@ -13,7 +13,13 @@ import { engineSummary } from '../model/voice';
 import { useApp } from '../state/AppContext';
 import { PadTools } from './PadTools';
 import { SearchMenu, type MenuOption } from './SearchMenu';
-import { Chips, ModAssignProvider, Panel } from './SynthControls';
+import {
+  Chips,
+  Knob,
+  ModAssignProvider,
+  Panel,
+  percent,
+} from './SynthControls';
 import { EngineEditor } from './SynthEngines';
 import { SynthFlow, type ModuleId } from './SynthFlow';
 import { ModStrip } from './SynthModulation';
@@ -22,6 +28,7 @@ import {
   CombineEditor,
   EffectsEditor,
   FiltersEditor,
+  UtilityEditor,
 } from './SynthModules';
 
 type View = 'synth' | 'library';
@@ -176,6 +183,14 @@ export function SynthScreen() {
       <ModAssignProvider
         value={{ armed, routes: selectedPreset.modulation, setAmount }}
       >
+        {view === 'synth' && (
+          <MacroDeck
+            preset={selectedPreset}
+            armed={armed}
+            setArmed={setArmed}
+            updatePreset={updatePreset}
+          />
+        )}
         <div
           className={`synth-workbench ${armed ? 'assigning' : ''}`}
           data-gesture-lock
@@ -204,6 +219,12 @@ export function SynthScreen() {
                     preset={selectedPreset}
                     updateVoice={updateVoice}
                     openEngine2={() => openModule('engine2')}
+                  />
+                )}
+                {activeModule === 'utility' && (
+                  <UtilityEditor
+                    preset={selectedPreset}
+                    updateVoice={updateVoice}
                   />
                 )}
                 {activeModule === 'filters' && (
@@ -251,6 +272,83 @@ export function SynthScreen() {
           />
         )}
       </ModAssignProvider>
+    </section>
+  );
+}
+
+const MACRO_SOURCES: ModulationSource[] = [
+  'macro1',
+  'macro2',
+  'macro3',
+  'macro4',
+];
+
+function MacroDeck({
+  preset,
+  armed,
+  setArmed,
+  updatePreset,
+}: {
+  preset: SynthPreset;
+  armed: ModulationSource | null;
+  setArmed: (source: ModulationSource | null) => void;
+  updatePreset: (mutator: (preset: SynthPreset) => void) => void;
+}) {
+  return (
+    <section
+      className="macro-deck"
+      data-gesture-lock
+      aria-label="Performance macros"
+    >
+      <div className="macro-deck-title">
+        <span>PERFORMANCE</span>
+        <strong>4 MACROS</strong>
+        <small>Turn to shape · arm to route</small>
+      </div>
+      <div className="macro-controls">
+        {preset.macros.map((macro, index) => {
+          const source = MACRO_SOURCES[index];
+          if (!source) return null;
+          const count = preset.modulation.filter(
+            (route) => route.source === source && route.amount !== 0,
+          ).length;
+          return (
+            <div
+              className={`macro-control ${armed === source ? 'armed' : ''}`}
+              key={source}
+            >
+              <Knob
+                label={macro.name.toUpperCase()}
+                value={macro.value ?? 0}
+                min={0}
+                max={1}
+                format={percent}
+                onChange={(value) =>
+                  updatePreset((next) => {
+                    next.macros[index].value = value;
+                  })
+                }
+              />
+              <button
+                className="macro-route"
+                aria-pressed={armed === source}
+                onClick={() => setArmed(armed === source ? null : source)}
+              >
+                M{index + 1} · {count} {count === 1 ? 'route' : 'routes'}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      <div className="architecture-rail" aria-label="Signal path">
+        <span>Sources</span>
+        <i>→</i>
+        <span>Filters</span>
+        <i>→</i>
+        <span>Amp</span>
+        <i>→</i>
+        <span>FX</span>
+      </div>
     </section>
   );
 }

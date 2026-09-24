@@ -28,6 +28,10 @@ const SOURCE_TEXT: Record<ModulationSource, string> = {
   ampEnv: 'Engine 1’s amp envelope. Edit its shape in Engine 1.',
   velocity: 'How hard the pad was hit. Soft hits pull the target down.',
   random: 'A new random offset on every hit, for natural variation.',
+  macro1: 'A playable macro. Set its position above, then route it here.',
+  macro2: 'A playable macro. Set its position above, then route it here.',
+  macro3: 'A playable macro. Set its position above, then route it here.',
+  macro4: 'A playable macro. Set its position above, then route it here.',
 };
 
 function SourceGlyph({
@@ -77,6 +81,13 @@ function SourceGlyph({
         ))}
       </svg>
     );
+  if (source.startsWith('macro'))
+    return (
+      <svg viewBox="0 0 96 24" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M31 20 A17 17 0 1 1 65 20" />
+        <line x1="48" y1="18" x2="60" y2="7" />
+      </svg>
+    );
   return (
     <svg viewBox="0 0 96 24" preserveAspectRatio="none" aria-hidden="true">
       {[14, 5, 18, 9, 20, 3, 12, 16].map((height, index) => (
@@ -100,7 +111,7 @@ export function ModStrip({
   openModule: (module: ModuleId) => void;
 }) {
   const { voice, modulation } = preset;
-  const available = availableDestinations(voice);
+  const available = availableDestinations(voice, preset.effects);
   const routes = armed
     ? modulation
         .map((route, index) => ({ route, index }))
@@ -211,6 +222,22 @@ export function ModStrip({
                 Edit the envelope in{' '}
                 {armed === 'modEnv' ? 'Filters' : 'Engine 1'}
               </button>
+            )}
+            {armed.startsWith('macro') && (
+              <Knob
+                label={
+                  preset.macros[Number(armed.slice(-1)) - 1]?.name ?? armed
+                }
+                value={preset.macros[Number(armed.slice(-1)) - 1]?.value ?? 0}
+                min={0}
+                max={1}
+                format={(value) => `${Math.round(value * 100)}%`}
+                onChange={(value) =>
+                  updatePreset((next) => {
+                    next.macros[Number(armed.slice(-1)) - 1].value = value;
+                  })
+                }
+              />
             )}
           </div>
           <div className="mod-targets">

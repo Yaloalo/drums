@@ -11,6 +11,7 @@ export type ModuleId =
   | 'engine1'
   | 'combine'
   | 'engine2'
+  | 'utility'
   | 'filters'
   | 'amp'
   | 'fx';
@@ -19,6 +20,7 @@ type NodeId =
   | 'engine1'
   | 'combine'
   | 'engine2'
+  | 'utility'
   | 'filter1'
   | 'routing'
   | 'filter2'
@@ -49,6 +51,7 @@ const MODULE_OF: Record<NodeId, ModuleId | null> = {
   engine1: 'engine1',
   combine: 'combine',
   engine2: 'engine2',
+  utility: 'utility',
   filter1: 'filters',
   routing: 'filters',
   filter2: 'filters',
@@ -60,6 +63,7 @@ const STAGE: Record<NodeId, number> = {
   engine1: 0,
   combine: 0,
   engine2: 0,
+  utility: 0,
   filter1: 1,
   routing: 1,
   filter2: 1,
@@ -70,10 +74,12 @@ const STAGE: Record<NodeId, number> = {
 const DESTINATIONS: Partial<Record<NodeId, ModulationDestination[]>> = {
   engine1: ['pitch', 'pitch1', 'engine1'],
   engine2: ['pitch', 'pitch2', 'engine2'],
+  utility: ['utility', 'utilityPitch'],
   combine: ['combine'],
   filter1: ['cutoff', 'resonance'],
   filter2: ['cutoff2', 'resonance2'],
   amp: ['amplitude', 'level', 'pan'],
+  fx: ['drive', 'delay', 'reverb'],
 };
 
 /*
@@ -206,6 +212,22 @@ export function SynthFlow({
       { from, to: 'filter2', weight: slot.filterMix },
     );
   });
+  if (voice.utility.enabled) {
+    const direct = Math.max(0, Math.min(1, voice.utility.direct));
+    edges.push(
+      {
+        from: 'utility',
+        to: 'filter1',
+        weight: (1 - direct) * (1 - voice.utility.filterMix),
+      },
+      {
+        from: 'utility',
+        to: 'filter2',
+        weight: (1 - direct) * voice.utility.filterMix,
+      },
+      { from: 'utility', to: 'amp', weight: direct },
+    );
+  }
   if (combining)
     edges.push(
       { from: 'engine2', to: 'combine', weight: 1, kind: 'combine' },
@@ -404,6 +426,30 @@ export function SynthFlow({
         two.enabled
           ? `Engine 2, ${ENGINE_NAMES[two.patch.engine]}, level ${percent(two.level)}`
           : 'Engine 2, off. Open to add a second layer',
+      )}
+      {node(
+        'utility',
+        `engine utility ${voice.utility.enabled ? '' : 'off'}`,
+        <>
+          <span className="flow-kicker">UTILITY</span>
+          <strong>{voice.utility.enabled ? 'Sub + Noise' : 'Off'}</strong>
+          <svg
+            className="utility-thumb"
+            viewBox="0 0 112 24"
+            aria-hidden="true"
+          >
+            <path d="M2 12 C14 2 24 2 36 12 S58 22 70 12 S92 2 110 12" />
+            <polyline points="2,20 12,16 22,21 32,14 42,19 52,13 62,20 72,15 82,21 92,14 102,18 110,15" />
+          </svg>
+          <small>
+            {voice.utility.enabled
+              ? `${percent(voice.utility.direct)} direct · ${voice.utility.noise.enabled ? voice.utility.noise.type : 'osc only'}`
+              : '+ Add support layer'}
+          </small>
+        </>,
+        voice.utility.enabled
+          ? `Utility source, ${percent(voice.utility.direct)} direct to amp`
+          : 'Utility source, off',
       )}
       {voice.filters.map((filter, index) =>
         node(

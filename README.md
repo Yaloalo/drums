@@ -67,24 +67,29 @@ The click works independently of sequence playback, shares the BPM and is schedu
 
 ## Sound design
 
-The synthesizer follows the voice structure of Arturia Pigments — two engine slots, two filters with a series↔parallel blend, an amp and effects — with modulation assigned by arming a source and dragging knob rings. It is modelled on that workflow, not an emulation of Pigments.
+The synthesizer follows the visual workflow of Arturia Pigments — two primary engine slots, an independent utility layer, two filters with a series↔parallel blend, an amp and effects — with playable macros and modulation assigned by arming a source and dragging knob rings. It is modelled on that workflow, not an emulation of Pigments.
 
 ```text
 Engine 1 ─┬─(To filter)─▶ Filter 1 ─┬─(series)──▶ Filter 2 ─┐
           │                         └─(parallel)───────────┼─▶ Amp ─▶ FX inserts ─▶ out
 Engine 2 ─┴─(To filter)─────────────────────────▶ Filter 2 ─┘            └─▶ delay / reverb sends
    └── Combine with Engine 1: Layer (+), FM (Engine 2 bends Engine 1's pitch) or Ring (Engine 1 × Engine 2)
+Utility ─── oscillator + noise ───▶ Filter 1 / Filter 2 ──┘
+                              └──▶ clean direct feed ─────▶ Amp
 ```
 
 The **Synth** view shows this path as a diagram. Each block is clickable and opens its editor underneath; arrows are weighted by how much signal takes each path, the series/parallel link redraws as the routing changes, and each hit lights the stages in order. On phones the diagram runs top to bottom.
 
 - **Engines**: each slot runs one of three engines — *Analog* (two oscillators + noise), *FM* (four operators, six algorithms) or *Harmonic* (additive partials with tilt, spread and inharmonicity). Every engine has its own amp envelope, pitch sweep, level and *To filter* balance between Filter 1 and Filter 2. Switching a slot's type keeps the edits for each type. Engine 2 is off until you turn it on.
 - **Combine**: *Layer* sums both engines; *FM* feeds Engine 2 into Engine 1's oscillator frequencies at audio rate (depth scales with each oscillator's pitch); *Ring* multiplies them, with an amount that blends from dry Engine 1 to fully ringed.
+- **Utility**: an always-available oscillator and noise layer with its own envelope, filter balance and clean direct feed. It is useful for sub reinforcement, click/transient layers and air without consuming Engine 2. *Deep 808* and *Chrome Snare* demonstrate the two uses.
 - **Filters**: two multimode filters (low-pass, high-pass, band-pass, notch), each with cutoff, resonance, envelope amount and key tracking, plus a shared filter envelope. The response curves are measured from a real `BiquadFilterNode`.
 - **Amp**: level, pan and velocity sensitivity, with both engine envelopes drawn on one time axis.
 - **FX**: drive, bit crush and compression as an ordered insert chain, then delay and reverb sends with a Color low-pass.
 
-**Modulation** sources — LFO 1, LFO 2, the filter envelope, Engine 1's envelope, velocity and random-per-hit — sit in the strip at the bottom. Pick a source and every knob it can reach gets a dashed orange ring; drag a knob to set that source's depth (up is positive, down negative; double-click clears it). The source panel lists everything it moves, with sliders and an *Add a target* menu for destinations without a knob. Knobs show small source tags when modulated.
+The four **performance macros** stay above the detailed editor, so one gesture can control several destinations. Every factory sound ships with useful Body, Motion, Edge and Space routes chosen for its active engines, filters and effects; macros can be rerouted like any other source.
+
+**Modulation** sources — LFO 1, LFO 2, the filter envelope, Engine 1's envelope, velocity, random-per-hit and the four macros — sit in the strip at the bottom. Pick a source and every knob it can reach gets a dashed orange ring; drag a knob to set that source's depth (up is positive, down negative; double-click clears it). The source panel lists everything it moves, with sliders and an *Add a target* menu for destinations without a knob. Destinations include engine and utility pitch/level, both filters, cross-modulation, harmonic tilt, amp/pan and live drive, delay and reverb amounts. Knobs show small source tags when modulated.
 
 The **output scope** is an oscilloscope line of the rendered patch through the real voice and effects graph: *Wave* shows about six cycles of the pitch, *20 ms*/*100 ms* the attack, *Hit* the whole sound. It starts at the sound's onset. Noise and random modulation mean the preview represents the patch rather than an identical sample for every hit. Changes are heard on the next hit, including hits from an already-running sequence.
 

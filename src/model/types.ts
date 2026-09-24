@@ -32,7 +32,10 @@ export type ModulationDestination =
   | 'cutoff2'
   | 'resonance2'
   | 'fmIndex'
-  | 'spectralTilt';
+  | 'spectralTilt'
+  | 'drive'
+  | 'delay'
+  | 'reverb';
 
 export interface Envelope {
   attack: number;
@@ -416,7 +419,13 @@ export interface AppSettings {
   lastArea: string;
 }
 
-export const emptyStep = (): PatternStep => ({ active: false, velocity: 0.82, accent: false, probability: 1, microtiming: 0 });
+export const emptyStep = (): PatternStep => ({
+  active: false,
+  velocity: 0.82,
+  accent: false,
+  probability: 1,
+  microtiming: 0,
+});
 
 export function cloneSerializable<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -425,7 +434,9 @@ export function cloneSerializable<T>(value: T): T {
 export function deepFreeze<T>(value: T): Readonly<T> {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
     Object.freeze(value);
-    Object.values(value as Record<string, unknown>).forEach((child) => deepFreeze(child));
+    Object.values(value as Record<string, unknown>).forEach((child) =>
+      deepFreeze(child),
+    );
   }
   return value;
 }
